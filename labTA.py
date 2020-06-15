@@ -13,6 +13,7 @@ MIN_VALUE = 0
 OVERLAPS = {'Sa_4': 'Sa_3', 'Sa_5':'Sa_4', 'Su_6':'Su_5', 'Su_7':'Su_6', 'Su_8':'Su_7', 'Su_9':'Su_8'} #dict of slots to check as keys, and overlapping slots as values
 NUM_SLOTS = 16.0 #number of slots
 NUM_STUDENTS = 45
+MAX_HAP = 258.0
 
 
 def viable_cand(slot, score):
@@ -145,6 +146,9 @@ def sched_happiness(schedule):
             if hap == 1: print('gave out a 1')
             total_happiness += hap #update total happiness
             studhap[index] += hap #update each students' happiness
+
+    #normalize total happiness score
+    total_happiness = float(total_happiness) / MAX_HAP
     #create a df from student happiness
     df_hap = pd.DataFrame(studhap, columns =['happiness'])
     print('student availability to happiness correlation coef: ', df['availability'].corr(df_hap['happiness']))
