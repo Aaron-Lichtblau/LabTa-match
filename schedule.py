@@ -17,14 +17,14 @@ class Schedule:
         """allow for getting slot details"""
         return (self.schedule[key])
 
-    def numStudents(self, slot):
+    def num_students(self, slot):
         """returns number of students in given slot"""
         return(len(self.schedule[slot]))
 
-    def addStudent(self, slot, student):
-        """adds a student to schedule"""
+    def add_student(self, slot, student):
+        """add_s a student to schedule"""
         self.schedule[slot].append(student)
 
-    def printSched(self):
+    def print_sched(self):
         """prints out the schedule"""
         print(json.dumps(self.schedule, indent=3))
