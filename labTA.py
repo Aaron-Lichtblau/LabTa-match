@@ -14,8 +14,9 @@ OVERLAPS = {'Sa_4': 'Sa_3', 'Sa_5':'Sa_4', 'Su_6':'Su_5', 'Su_7':'Su_6', 'Su_8':
 NUM_SLOTS = 16.0 #number of slots
 NUM_STUDENTS = 45
 
-# check for candidates who reported score on slot
+
 def viableCand(slot, score):
+    """check for candidates who reported score on slot"""
     candidates = []
     #check that the student isn't working an overlapping shift
     overlap_slots = OVERLAPS.keys()
@@ -33,17 +34,16 @@ def viableCand(slot, score):
     candidates = list(candRows)
     return(candidates) # candidates are their row number, not name!
 
-# swap out a TA for a different TA with the desired experience
-# not working yet
 def swapTA(slot, oldSched, oldTA, newExp):
+    """swap out a TA for a different TA with the desired experience, (not working yet) """
     #find students to swap check
     #min reduces happiness
     newSched.expStats()
     print("the new schdule's total happiness score is: ", newSched.schedHappiness())
     return(newSched)
 
-# equalize the order of candidates based on how happy they already are
 def equalize(slotCandidates):
+    """equalize the order of candidates based on how happy they already are"""
     #initial equalDict
     candDict = {}
     # randomize candidate list
@@ -60,8 +60,8 @@ def equalize(slotCandidates):
 
     return(candidates)
 
-# put students into schedule, update their slot to -1, update hours col, update happiness
 def updateSchedule(schedule, slot, student, score):
+    """put students into schedule, update their slot to -1, update hours col, update happiness"""
     # set slot to -1
     df.at[student, slot] = -(score)
     #put student into schedule
@@ -78,6 +78,7 @@ def updateSchedule(schedule, slot, student, score):
 
 
 def scheduler(score, slotdict, schedule):
+    """creates a schedule"""
     # set limit on how low score can be
     while(score > 0):
         for slot in slotdict:
@@ -101,8 +102,8 @@ def scheduler(score, slotdict, schedule):
 
     return(schedule)
 
-# prints stats on experience per slot
 def expStats(schedule):
+    """prints stats on experience per slot"""
     # get and print average exp of each slot
     lowest = MAX_VALUE
     highest = MIN_VALUE
@@ -128,8 +129,8 @@ def expStats(schedule):
     # print highest exp slot
     print("highest average experience in a slot was: ", highest)
 
-# returns the total happiness score of the given schedule
 def schedHappiness(schedule):
+    """returns the total happiness score of the given schedule"""
     #sum happiness of every TA
     totalHappiness = 0
     length = len(df.index)
