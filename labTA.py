@@ -5,7 +5,7 @@ import random
 from schedule import Schedule
 from oauth2client.service_account import ServiceAccountCredentials
 import pandas as pd
-# import matplotlib.pyplot as plt
+import numpy as np
 
 HOURS_LIMIT = 4 #limit of hours a TA can work
 MAX_VALUE = 10
@@ -14,9 +14,10 @@ OVERLAPS = {'Sa_4': 'Sa_3', 'Sa_5':'Sa_4', 'Su_6':'Su_5', 'Su_7':'Su_6', 'Su_8':
 NUM_SLOTS = 16.0 #number of slots
 NUM_STUDENTS = 45
 MAX_HAP = 258.0
+score = 3
 
 
-def viable_cand(slot, score):
+def viable_cand(df, slot, score):
     """check for candidates who reported score on slot"""
     candidates = []
     #check that the student isn't working an overlapping shift
@@ -43,7 +44,7 @@ def swap_TA(slot, old_sched, old_TA, new_exp):
     print("the new schdule's total happiness score is: ", new_sched.sched_happiness())
     return(new_sched)
 
-def equalize(slot_candidates):
+def equalize(df, slot_candidates):
     """equalize the order of candidates based on how happy they already are"""
     #initial equalDict
     cand_dict = {}
@@ -61,7 +62,7 @@ def equalize(slot_candidates):
 
     return(candidates)
 
-def update_schedule(schedule, slot, student, score):
+def update_schedule(df, schedule, slot, student, score):
     """put students into schedule, update their slot to -1, update hours col, update happiness"""
     # set slot to -1
     df.at[student, slot] = -(score)
@@ -78,17 +79,17 @@ def update_schedule(schedule, slot, student, score):
     df.at[student, 'happiness'] = temp
 
 
-def scheduler(score, slotdict, schedule):
+def scheduler(df, score, slotdict, schedule):
     """creates a schedule"""
     # set limit on how low score can be
     while(score > 0):
         for slot in slotdict:
-            slot_candidates = viable_cand(slot, score)
+            slot_candidates = viable_cand(df, slot, score)
             curr_count = schedule.num_students(slot) # get current num of students on that slot
             cap = slotdict[slot]
 
             # reorder based on current happiness
-            slot_candidates = equalize(slot_candidates)
+            slot_candidates = equalize(df, slot_candidates)
 
             # cap num of students put into schedule
             if (len(slot_candidates) + curr_count > cap):
@@ -96,14 +97,14 @@ def scheduler(score, slotdict, schedule):
 
             # put students into schedule
             for cand in slot_candidates:
-                update_schedule(schedule, slot, cand, score)
+                update_schedule(df, schedule, slot, cand, score)
 
         #decrement score
         score -= 1
 
     return(schedule)
 
-def exp_stats(schedule):
+def exp_stats(df, schedule):
     """prints stats on experience per slot"""
     # get and print average exp of each slot
     lowest = MAX_VALUE
@@ -122,15 +123,28 @@ def exp_stats(schedule):
         if (ave_exp > highest):
             highest = ave_exp
         print(slot, " has average experience: ", ave_exp)
-    print("Summary of exp stats: ")
-    # print lowest exp slot
-    print("lowest average experience in a slot was: ", lowest)
-    # print average slot exp
-    print("average experience of each slot was: ", ave_total)
-    # print highest exp slot
-    print("highest average experience in a slot was: ", highest)
+    # print("Summary of exp stats: ")
+    # # print lowest exp slot
+    # print("lowest average experience in a slot was: ", lowest)
+    # # print average slot exp
+    # print("average experience of each slot was: ", ave_total)
+    # # print highest exp slot
+    # print("highest average experience in a slot was: ", highest)
+def boxplot_stats(data):
+    data = np.array(data)
+    print('median: ', np.median(data))
+    upper_quartile = np.percentile(data, 75)
+    print('upper quartile: ', upper_quartile)
+    lower_quartile = np.percentile(data, 25)
+    print('lower quartile: ', lower_quartile)
+    iqr = upper_quartile - lower_quartile
+    print('iqr: ', iqr)
+    upper_whisker = data[data<=upper_quartile+1.5*iqr].max()
+    print('upper whisker: ', upper_whisker)
+    lower_whisker = data[data>=lower_quartile-1.5*iqr].min()
+    print('lower whisker: ', lower_whisker)
 
-def sched_happiness(schedule):
+def sched_happiness(df, schedule):
     """returns the total happiness score of the given schedule"""
     #sum happiness of every TA
     total_happiness = 0
@@ -143,7 +157,7 @@ def sched_happiness(schedule):
             index = df.loc[df['name'] == student].index[0]
             hap = math.fabs(df.at[index, slot])
             studslot[index].append(slot)
-            if hap == 1: print('gave out a 1')
+            # if hap == 1: print('gave out a 1')
             total_happiness += hap #update total happiness
             studhap[index] += hap #update each students' happiness
 
@@ -151,11 +165,11 @@ def sched_happiness(schedule):
     total_happiness = float(total_happiness) / MAX_HAP
     #create a df from student happiness
     df_hap = pd.DataFrame(studhap, columns =['happiness'])
-    print('student availability to happiness correlation coef: ', df['availability'].corr(df_hap['happiness']))
-    print('total happiness: ', total_happiness)
+    # print('student availability to happiness correlation coef: ', df['availability'].corr(df_hap['happiness']))
+    # print('total happiness: ', total_happiness)
     # get variance of happiness
     var = df_hap.var()
-    print('variance of happiness is: ', var[0])
+    # print('variance of happiness is: ', var[0])
 
     envy = 0
     incorrect = 0
@@ -180,8 +194,11 @@ def sched_happiness(schedule):
                 # print("student ", iStudent, " values ", jStudent,"'s slots more than ", jStudent)
                 incorrect += 1
 
-    print('envy score: ', envy)
-    print('number incorrect: ', incorrect)
+    # print('envy score: ', envy)
+    # print('number incorrect: ', incorrect)
+    corr = df['availability'].corr(df_hap['happiness'])
+    hap_stats = [total_happiness, corr, var[0], envy, incorrect]
+    return(hap_stats)
     # plt.hist(studhap, density=True, bins=30)  # `density=False` would make counts
     # plt.ylabel('Probability')
     # plt.xlabel('Happiness');
@@ -195,26 +212,68 @@ client = gspread.authorize(creds)
 
 # Find workbook and open the first sheet
 sheet = client.open('LabTA_test2').sheet1
-df = pd.DataFrame(sheet.get_all_records())
-json_before = df.to_json(orient='index')
-
+df_original = pd.DataFrame(sheet.get_all_records())
+json_before = df_original.to_json(orient='index')
+df_copy = df_original
 # Testing area
-score = 3
+
 # slots and num of TA's desired
 slotdict = {"M_7" : 8, "M_9" : 6,"Tu_7" : 5, "Tu_9" : 4,"W_7" : 4, "W_9" : 4,"Th_7" : 4, "Th_9" : 4,"F_7" : 4, "F_9" : 4,"Sa_3" : 5, "Sa_4" : 6,"Sa_5" : 5,"Su_5" : 4,"Su_6" : 3,"Su_7" : 6,"Su_8" : 4, "Su_9" : 6}
-blank_sched = Schedule()
-schedule = scheduler(score, slotdict, blank_sched)
 
 #shirley's schedule
 real_data = {"M_7" : ['Tajreen Ahmed', 'Urvashi Uberoy', 'Ze-Xin Koh', 'Kyle Johnson', 'Ariel Rakovitsky', 'Caroline di Vittorio', 'Khyati Agrawal', 'Annie Zhou'], "M_9" : ['Cathleen Kong', 'HJ Suh', 'Ze-Xin Koh', 'Akash Pattnaik', 'Ariel Rakovitsky', 'Caroline di Vittorio'],"Tu_7" : ['Uri Schwartz','Alan Ding','Urvashi Uberoy','Akash Pattnaik','Bobby Morck'], "Tu_9" : ['Justin Chang','Alan Ding','Caio Costa','Bobby Morck'],"W_7" : ['Michelle Woo','Avi Bendory','Kawin Tiyawattanaroj','Tajreen Ahmed'], "W_9" : ['Michelle Woo','Avi Bendory','Kawin Tiyawattanaroj','Khyati Agrawal'],"Th_7" : ['Charlie Smith','Niranjan Shankar','Caio Costa','Ryan Golant'], "Th_9" : ['Charlie Smith','Arjun Devraj','Somya Arora','Jason Xu'],"F_7" : ['Annie Zhou','Nathan Alam','Sahan Paliskara','Connie Miao'], "F_9" : ['Somya Arora','Nathan Alam','Sahan Paliskara','Ryan Golant'],"Sa_3" : ['Anu Vellore','Ibrahim Ali Hashmi','Aditya Kohli','Lily Zhang','Ezra Zinberg'], "Sa_4" : ['Jackson Deitelzweig','Donovan Coronado','Jason Xu','Uri Schwartz','Ally Dalman','Catherine Yu'],"Sa_5" : ['Anu Vellore','Ibrahim Ali Hashmi','Connie Miao','Lily Zhang','Ezra Zinberg'],"Su_5" : ['Nala Sharadjaya','Arjun Devraj','Donovan Coronado','Niranjan Shankar'],"Su_6" : ['Kyle Johnson','Sandun Bambarandage','Jackson Deitelzweig'],"Su_7" : ['Yashodhar Govil','Shirley Z.','Aniela Macek','Chuk Uzoegwu','Nala Sharadjaya','Aditya Kohli'],"Su_8" : ['Cathleen Kong','Sandun Bambarandage','HJ Suh','Ally Dalman'], "Su_9" : ['Yashodhar Govil','Shirley Z.','Aniela Macek','Chuk Uzoegwu','Justin Chang','Catherine Yu']}
 real_sched = Schedule(real_data)
 print("real schedule stats:")
-exp_stats(real_sched)
-sched_happiness(real_sched)
-print(df)
+exp_stats(df_copy, real_sched)
+sched_happiness(df_copy, real_sched)
+
+
+total_hap = []
+corr = []
+var = []
+envy = []
+incorrect = []
+for i in range(20):
+    sheet = client.open('LabTA_test2').sheet1
+    df_original = pd.DataFrame(sheet.get_all_records())
+    df_copy = df_original
+    blank_sched = Schedule()
+    schedule = scheduler(df_copy, score, slotdict, blank_sched)
+    hap_stats = sched_happiness(df_copy, schedule)
+
+    total_hap.append(hap_stats[0]) # total happiness scores
+
+    corr.append(hap_stats[1]) # avail to happiness correlation
+
+    var.append(hap_stats[2]) # variance of happiness
+
+    envy.append(hap_stats[3])# envy score
+
+    incorrect.append(hap_stats[4]) # incorrect score
+
+print('Total Happiness: ')
+print()
+boxplot_stats(total_hap)
+print()
+print('Availability to happiness correlation: ')
+print()
+boxplot_stats(corr)
+print()
+print('Variance of happiness: ')
+print()
+boxplot_stats(var)
+print()
+print('Envy stats: ')
+print()
+boxplot_stats(envy)
+print()
+print('Incorrect stats: ')
+print()
+boxplot_stats(incorrect)
+# print(df)
 # print("LabTA Schedule:")
 # schedule.printSched()
-print("my schedule stats:")
-exp_stats(schedule)
-sched_happiness(schedule)
-json_after = df.to_json(orient='index')
+# print("my schedule stats:")
+# exp_stats(schedule)
+# sched_happiness(schedule)
+# json_after = df.to_json(orient='index')
