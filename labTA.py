@@ -64,6 +64,7 @@ def equalize(df, slot_candidates):
 
 def update_schedule(df, schedule, slot, student, score):
     """put students into schedule, update their slot to -1, update hours col, update happiness"""
+    # if score == 1: print('a 1 was given')
     # set slot to -1
     df.at[student, slot] = -(score)
     #put student into schedule
@@ -76,6 +77,7 @@ def update_schedule(df, schedule, slot, student, score):
 
     # add to happiness
     temp = score + df.at[student, 'happiness']
+    # temp = float(score + df.at[student, 'happiness']) / float (df.at[student, 'availability'])
     df.at[student, 'happiness'] = temp
 
 
@@ -204,6 +206,9 @@ def sched_happiness(df, schedule):
     # plt.xlabel('Happiness');
     # plt.show()
 
+#-------------------------------------------------------------------------------
+# Testing area
+#-------------------------------------------------------------------------------
 
 # use creds to create a client to interact with the Google Drive API
 scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
@@ -215,18 +220,31 @@ sheet = client.open('LabTA_test2').sheet1
 df_original = pd.DataFrame(sheet.get_all_records())
 json_before = df_original.to_json(orient='index')
 df_copy = df_original
-# Testing area
 
 # slots and num of TA's desired
 slotdict = {"M_7" : 8, "M_9" : 6,"Tu_7" : 5, "Tu_9" : 4,"W_7" : 4, "W_9" : 4,"Th_7" : 4, "Th_9" : 4,"F_7" : 4, "F_9" : 4,"Sa_3" : 5, "Sa_4" : 6,"Sa_5" : 5,"Su_5" : 4,"Su_6" : 3,"Su_7" : 6,"Su_8" : 4, "Su_9" : 6}
+
+# randomize order of slots 
+l = list(slotdict.items())
+random.shuffle(l)
+slotdict = dict(l)
 
 #shirley's schedule
 real_data = {"M_7" : ['Tajreen Ahmed', 'Urvashi Uberoy', 'Ze-Xin Koh', 'Kyle Johnson', 'Ariel Rakovitsky', 'Caroline di Vittorio', 'Khyati Agrawal', 'Annie Zhou'], "M_9" : ['Cathleen Kong', 'HJ Suh', 'Ze-Xin Koh', 'Akash Pattnaik', 'Ariel Rakovitsky', 'Caroline di Vittorio'],"Tu_7" : ['Uri Schwartz','Alan Ding','Urvashi Uberoy','Akash Pattnaik','Bobby Morck'], "Tu_9" : ['Justin Chang','Alan Ding','Caio Costa','Bobby Morck'],"W_7" : ['Michelle Woo','Avi Bendory','Kawin Tiyawattanaroj','Tajreen Ahmed'], "W_9" : ['Michelle Woo','Avi Bendory','Kawin Tiyawattanaroj','Khyati Agrawal'],"Th_7" : ['Charlie Smith','Niranjan Shankar','Caio Costa','Ryan Golant'], "Th_9" : ['Charlie Smith','Arjun Devraj','Somya Arora','Jason Xu'],"F_7" : ['Annie Zhou','Nathan Alam','Sahan Paliskara','Connie Miao'], "F_9" : ['Somya Arora','Nathan Alam','Sahan Paliskara','Ryan Golant'],"Sa_3" : ['Anu Vellore','Ibrahim Ali Hashmi','Aditya Kohli','Lily Zhang','Ezra Zinberg'], "Sa_4" : ['Jackson Deitelzweig','Donovan Coronado','Jason Xu','Uri Schwartz','Ally Dalman','Catherine Yu'],"Sa_5" : ['Anu Vellore','Ibrahim Ali Hashmi','Connie Miao','Lily Zhang','Ezra Zinberg'],"Su_5" : ['Nala Sharadjaya','Arjun Devraj','Donovan Coronado','Niranjan Shankar'],"Su_6" : ['Kyle Johnson','Sandun Bambarandage','Jackson Deitelzweig'],"Su_7" : ['Yashodhar Govil','Shirley Z.','Aniela Macek','Chuk Uzoegwu','Nala Sharadjaya','Aditya Kohli'],"Su_8" : ['Cathleen Kong','Sandun Bambarandage','HJ Suh','Ally Dalman'], "Su_9" : ['Yashodhar Govil','Shirley Z.','Aniela Macek','Chuk Uzoegwu','Justin Chang','Catherine Yu']}
 real_sched = Schedule(real_data)
 print("real schedule stats:")
 exp_stats(df_copy, real_sched)
-sched_happiness(df_copy, real_sched)
-
+real_hap = sched_happiness(df_copy, real_sched)
+print('Total Happiness: ', real_hap[0])
+print()
+print('Availability to happiness correlation: ', real_hap[1])
+print()
+print('Variance of happiness: ', real_hap[2])
+print()
+print('Envy stats: ', real_hap[3])
+print()
+print('Incorrect stats: ', real_hap[4])
+print()
 
 total_hap = []
 corr = []
@@ -270,9 +288,15 @@ print()
 print('Incorrect stats: ')
 print()
 boxplot_stats(incorrect)
-# print(df)
+
+
+sheet = client.open('LabTA_test2').sheet1
+df_original = pd.DataFrame(sheet.get_all_records())
+blank_sched = Schedule()
+schedule = scheduler(df_original, score, slotdict, blank_sched)
+print(df_original)
 # print("LabTA Schedule:")
-# schedule.printSched()
+# schedule.print_sched()
 # print("my schedule stats:")
 # exp_stats(schedule)
 # sched_happiness(schedule)
