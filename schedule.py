@@ -22,8 +22,16 @@ class Schedule:
         return(len(self.schedule[slot]))
 
     def add_student(self, slot, student):
-        """add_s a student to schedule"""
+        """adds a student to slot in schedule"""
+        if student in self.schedule[slot]:
+            print('this student: ', student, " is already in the schedule at this slot: ", slot)
         self.schedule[slot].append(student)
+
+    def remove_student(self, slot, student):
+        """remove a student from slot in schedule"""
+        if student not in self.schedule[slot]:
+            print('this student: ', student, " is already not in the schedule at this slot: ", slot)
+        self.schedule[slot].remove(student)
 
     def print_sched(self):
         """prints out the schedule"""

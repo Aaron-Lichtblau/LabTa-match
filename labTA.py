@@ -11,6 +11,7 @@ HOURS_LIMIT = 4 #limit of hours a TA can work
 MAX_VALUE = 10
 MIN_VALUE = 0
 OVERLAPS = {'Sa_4': 'Sa_3', 'Sa_5':'Sa_4', 'Su_6':'Su_5', 'Su_7':'Su_6', 'Su_8':'Su_7', 'Su_9':'Su_8'} #dict of slots to check as keys, and overlapping slots as values
+SLOTS = ["M_7", "M_9","Tu_7", "Tu_9","W_7", "W_9","Th_7", "Th_9","F_7", "F_9","Sa_3", "Sa_4","Sa_5","Su_5","Su_6","Su_7","Su_8", "Su_9"]
 NUM_SLOTS = 16.0 #number of slots
 NUM_STUDENTS = 45
 MAX_HAP = 258.0
@@ -36,13 +37,99 @@ def viable_cand(df, slot, score):
     candidates = list(cand_rows)
     return(candidates) # candidates are their row number, not name!
 
-def swap_TA(slot, old_sched, old_TA, new_exp):
-    """swap out a TA for a different TA with the desired experience, (not working yet) """
-    #find students to swap check
-    #min reduces happiness
-    new_sched.exp_stats()
-    print("the new schdule's total happiness score is: ", new_sched.sched_happiness())
-    return(new_sched)
+def check_swap(df, old_sched, unhap_studs):
+    """swap out TAs for different TAs to resolve incorrectness """
+    swap_dict = {}
+    for student in unhap_studs.keys():
+        bad_slot = unhap_studs[student]
+        swap_dict[student] = []
+
+        # get other students who had unused 3's and 2's on this slot
+        swap_candidates = list(df.loc[df[bad_slot] == 3].index)
+        swap2_candidates = list(df.loc[df[bad_slot] == 2].index)
+        swap_candidates.extend(swap2_candidates)
+
+
+        # get the student's unused 3's and 2's slots
+        unused_slots = []
+        unused2_slots = []
+        for slot in SLOTS:
+            if df.at[student, slot] == 3:
+                unused_slots.append(slot)
+            if df.at[student, slot] == 2:
+                unused2_slots.append(slot)
+        unused_slots.extend(unused2_slots)
+
+        # for each swap candidate get their used slots of 3's and 2's
+        for cand in swap_candidates:
+            swap_slots = []
+            swap2_slots = []
+            for slot in SLOTS:
+                if df.at[cand, slot] == -3:
+                    swap_slots.append(slot)
+                if df.at[cand, slot] == -2:
+                    swap2_slots.append(slot)
+            swap_slots.extend(swap2_slots)
+
+            # compare lists of slots if theres a match, add to list of students to swap
+            for i_slot in unused_slots:
+                for j_slot in swap_slots:
+                    if i_slot == j_slot:
+                        swap_dict[student].append([cand, i_slot])
+    used = []
+    # swap them and update schedule/df
+    for student in swap_dict:
+        bad_slot = unhap_studs[student]
+        #make sure slot hasn't been swapped for yet
+        i = 0
+        swapped = False
+        while(swapped == False):
+            new_ta = swap_dict[student][i][0]
+            new_slot = swap_dict[student][i][1]
+            if [new_ta, new_slot] not in used:
+                swap_TA(df, old_sched, student, bad_slot, new_ta, new_slot)
+                used.append([new_ta, new_slot])
+                swapped = True
+            else:
+                i += 1
+
+def get_unhappy(df):
+    unhap_studs = {}
+    for student in range(NUM_STUDENTS):
+        for slot in SLOTS:
+            if df.at[student, slot] == -1:
+                unhap_studs[student] = slot
+    return(unhap_studs)
+
+def swap_TA(df, schedule, old_ta, old_slot, new_ta, new_slot):
+    """swap ta's in the schedule at the given slots and update the dataframe"""
+    old_name = df.at[old_ta, 'name']
+    new_name = df.at[new_ta, 'name']
+    schedule.remove_student(old_slot, old_name)
+    schedule.remove_student(new_slot, new_name)
+    schedule.add_student(old_slot, new_name)
+    schedule.add_student(new_slot, old_name)
+    #update df
+    update_df(df, old_ta, old_slot)
+    update_df(df, old_ta, new_slot)
+    update_df(df, new_ta, new_slot)
+    update_df(df, new_ta, old_slot)
+
+def update_df(df, student, slot):
+    #update preference table
+    score = df.at[student, slot]
+
+    df.at[student, slot] = -(score)
+    #update hours worked and happiness
+    temp_work = df.at[student, 'hours']
+    temp_hap = df.at[student, 'happiness']
+    if df.at[student, slot] < 0: #shows they added slot
+        df.at[student, 'hours'] = (temp_work + 2)
+        df.at[student, 'happiness'] = (temp_hap + score)
+    else:
+        df.at[student, 'hours'] = (temp_work - 2)
+        df.at[student, 'happiness'] = (temp_hap + score)
+
 
 def equalize(df, slot_candidates):
     """equalize the order of candidates based on how happy they already are"""
@@ -64,8 +151,9 @@ def equalize(df, slot_candidates):
 
 def update_schedule(df, schedule, slot, student, score):
     """put students into schedule, update their slot to -1, update hours col, update happiness"""
-    # if score == 1: print('a 1 was given')
-    # set slot to -1
+    # if (score == 1):
+    #     print('a 1 was given')
+    # set slot to -score
     df.at[student, slot] = -(score)
     #put student into schedule
     name = df.at[student, 'name']
@@ -224,7 +312,7 @@ df_copy = df_original
 # slots and num of TA's desired
 slotdict = {"M_7" : 8, "M_9" : 6,"Tu_7" : 5, "Tu_9" : 4,"W_7" : 4, "W_9" : 4,"Th_7" : 4, "Th_9" : 4,"F_7" : 4, "F_9" : 4,"Sa_3" : 5, "Sa_4" : 6,"Sa_5" : 5,"Su_5" : 4,"Su_6" : 3,"Su_7" : 6,"Su_8" : 4, "Su_9" : 6}
 
-# randomize order of slots 
+# randomize order of slots
 l = list(slotdict.items())
 random.shuffle(l)
 slotdict = dict(l)
@@ -246,55 +334,83 @@ print()
 print('Incorrect stats: ', real_hap[4])
 print()
 
-total_hap = []
-corr = []
-var = []
-envy = []
-incorrect = []
-for i in range(20):
-    sheet = client.open('LabTA_test2').sheet1
-    df_original = pd.DataFrame(sheet.get_all_records())
-    df_copy = df_original
-    blank_sched = Schedule()
-    schedule = scheduler(df_copy, score, slotdict, blank_sched)
-    hap_stats = sched_happiness(df_copy, schedule)
-
-    total_hap.append(hap_stats[0]) # total happiness scores
-
-    corr.append(hap_stats[1]) # avail to happiness correlation
-
-    var.append(hap_stats[2]) # variance of happiness
-
-    envy.append(hap_stats[3])# envy score
-
-    incorrect.append(hap_stats[4]) # incorrect score
-
-print('Total Happiness: ')
-print()
-boxplot_stats(total_hap)
-print()
-print('Availability to happiness correlation: ')
-print()
-boxplot_stats(corr)
-print()
-print('Variance of happiness: ')
-print()
-boxplot_stats(var)
-print()
-print('Envy stats: ')
-print()
-boxplot_stats(envy)
-print()
-print('Incorrect stats: ')
-print()
-boxplot_stats(incorrect)
+# total_hap = []
+# corr = []
+# var = []
+# envy = []
+# incorrect = []
+# for i in range(20):
+#     sheet = client.open('LabTA_test2').sheet1
+#     df_original = pd.DataFrame(sheet.get_all_records())
+#     df_copy = df_original
+#     blank_sched = Schedule()
+#     schedule = scheduler(df_copy, score, slotdict, blank_sched)
+#     hap_stats = sched_happiness(df_copy, schedule)
+#
+#     total_hap.append(hap_stats[0]) # total happiness scores
+#
+#     corr.append(hap_stats[1]) # avail to happiness correlation
+#
+#     var.append(hap_stats[2]) # variance of happiness
+#
+#     envy.append(hap_stats[3])# envy score
+#
+#     incorrect.append(hap_stats[4]) # incorrect score
+#
+# print('Total Happiness: ')
+# print()
+# boxplot_stats(total_hap)
+# print()
+# print('Availability to happiness correlation: ')
+# print()
+# boxplot_stats(corr)
+# print()
+# print('Variance of happiness: ')
+# print()
+# boxplot_stats(var)
+# print()
+# print('Envy stats: ')
+# print()
+# boxplot_stats(envy)
+# print()
+# print('Incorrect stats: ')
+# print()
+# boxplot_stats(incorrect)
 
 
 sheet = client.open('LabTA_test2').sheet1
 df_original = pd.DataFrame(sheet.get_all_records())
 blank_sched = Schedule()
 schedule = scheduler(df_original, score, slotdict, blank_sched)
+pre_hap = sched_happiness(df_original, schedule)
+print('Total Happiness: ', pre_hap[0])
+print()
+print('Availability to happiness correlation: ', pre_hap[1])
+print()
+print('Variance of happiness: ', pre_hap[2])
+print()
+print('Envy stats: ', pre_hap[3])
+print()
+print('Incorrect stats: ', pre_hap[4])
+print()
 print(df_original)
+unhap_studs = get_unhappy(df_original)
+check_swap(df_original, schedule, unhap_studs)
+
+post_hap = sched_happiness(df_original, schedule)
+print('Total Happiness: ', post_hap[0])
+print()
+print('Availability to happiness correlation: ', post_hap[1])
+print()
+print('Variance of happiness: ', post_hap[2])
+print()
+print('Envy stats: ', post_hap[3])
+print()
+print('Incorrect stats: ', post_hap[4])
+print()
+print(df_original)
+unhap_studs = get_unhappy(df_original)
+check_swap(df_original, schedule, unhap_studs)
 # print("LabTA Schedule:")
 # schedule.print_sched()
 # print("my schedule stats:")
