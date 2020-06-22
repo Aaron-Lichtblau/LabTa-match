@@ -8,8 +8,8 @@ SLOTS = ["M_7", "M_9","Tu_7", "Tu_9","W_7", "W_9","Th_7", "Th_9","F_7", "F_9","S
 NUM_SLOTS = 16.0 #number of slots
 NUM_STUDENTS = 45
 
-def correct_exp(df, schedule, slot, student):
-    """corrects slot by swapping out given student with too little or too much experience"""
+def suggest(df, schedule, slot, student):
+    """suggests a swap given student in a slot with too little or too much experience"""
 
     #get experience of slot and make student exp dict
     stud_exp_dict = {}
