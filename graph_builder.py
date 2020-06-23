@@ -2,6 +2,7 @@ import networkx as nx
 import gspread
 import pandas as pd
 from schedule import Schedule
+import stats
 import re
 from oauth2client.service_account import ServiceAccountCredentials
 
@@ -12,11 +13,17 @@ NUM_STUDENTS = 45
 HOURS_LIMIT = 4 #limit of hours a TA can work
 
 # give the student-slot edge a weight
-#add edges between (max_weight) if student put a 0
+#add edges between (min_weight) if student put a 0
 #rank weight edges based on 1. preference 2. availability 3. happiness
 def weight_edge(df, student, slot):
     """returns the student-slot edge weight"""
     weight = 0
+    pref_coef = 100
+    #get their preference score * 100
+    pref_score = (df.at[student, slot] * pref_coef)
+    #add their availability score
+    avail_score = df.at[student, "availability"]
+    weight = pref_score + avail_score
     return (weight)
 
 # build an unconnect graph
@@ -38,16 +45,29 @@ def unconnected_graph():
     #return the unconnect graph
     return(G)
 
+#convert from set of mate nodes to graph
+def set_to_graph(set):
+    graph = nx.Graph()
+    #add the two nodes to the graph and add edge between them
+    for u,v in set:
+        graph.add_node(u)
+        graph.add_node(v)
+        graph.add_edge(u, v)
+    return(graph)
+
+
 # convert from graph to schedule
 def graph_to_sched(df, graph):
     """converts a graph into a schedule"""
-    nodes = list(graph.nodes)
+
+
     schedule = {"M_7" : [], "M_9" : [],"Tu_7" : [], "Tu_9" : [],"W_7" : [], "W_9" : [],"Th_7" : [], "Th_9" : [],"F_7" : [], "F_9" : [],"Sa_3" : [], "Sa_4" : [],"Sa_5" : [],"Su_5" : [],"Su_6" : [],"Su_7" : [],"Su_8" : [], "Su_9" : []}
 
     for slot in schedule.keys():
+        nodes = list(graph.nodes)
         search = str(slot) + ".*"
         r = re.compile(search)
-        slot_nodes = list(filter(r.match, nodes))
+        slot_nodes = list(filter(r.search, nodes))
         for nodes in slot_nodes:
             #get the student node that is neighbors with this slot
             ta_node = list(graph.neighbors(nodes))
@@ -75,8 +95,8 @@ df_original = pd.DataFrame(sheet.get_all_records())
 #create a dict to convert student nodes to student nums
 STUD_NODES_TO_NUMS = {}
 for student in range(NUM_STUDENTS):
-    node1 = str(student) + "." + "1"
-    node2 = str(student) + "." + "2"
+    node1 = str(student) + "." + "0"
+    node2 = str(student) + "." + "1"
     STUD_NODES_TO_NUMS[node1] = student
     STUD_NODES_TO_NUMS[node2] = student
 
@@ -87,7 +107,7 @@ for slot in slotdict.keys():
     for i in range(slotdict[slot]):
         slot_node = str(slot) + "." + str(i)
         SLOT_NODES[slot].append(slot_node)
-print(SLOT_NODES)
+
 # make an unconnected graph
 G = unconnected_graph()
 
@@ -102,12 +122,14 @@ for student in range(NUM_STUDENTS):
                 G.add_weighted_edges_from([(stud_node, slot_node, edge_weight)])
 
 #get max weight matching
-max_weight_graph =
+max_weight_set = nx.max_weight_matching(G)
+
+max_weight_graph = set_to_graph(max_weight_set)
 
 #convert to schedule
 max_weight_sched = graph_to_sched(df_original, max_weight_graph)
 Schedule.print_sched(max_weight_sched)
-Evaluate happiness stats of schedule
+#Evaluate happiness stats of schedule
 post_hap = stats.sched_happiness(df_original, max_weight_sched)
 print('Total Happiness: ', post_hap[0])
 print()

@@ -10,6 +10,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 import pandas as pd
 import numpy as np
 
+
 HOURS_LIMIT = 4 #limit of hours a TA can work
 MAX_VALUE = 10
 MIN_VALUE = 0
@@ -108,6 +109,19 @@ def schedule_to_df(df, schedule):
     for slot in schedule:
         for student in slot:
             swap.update_df(df, student, slot)
+
+def get_order(df):
+    """returns order of slots to fill in for creation of schedule"""
+    ordered_slots = {}
+    # smart ordering of slots
+    for slot in slotdict.keys():
+        #get each slots sum of preferences over all students
+        ordered_slots[slot] = df[slot].sum(axis = 0)
+
+    ordered_slotdict = {k: v for k, v in sorted(ordered_slots.items(), key=lambda item: item[1])}
+    for slot in ordered_slotdict:
+        ordered_slotdict[slot] = slotdict[slot]
+    return(ordered_slots)
 #-------------------------------------------------------------------------------
 # Testing area
 #-------------------------------------------------------------------------------
@@ -130,15 +144,7 @@ l = list(slotdict.items())
 random.shuffle(l)
 slotdict = dict(l)
 
-ordered_slots = {}
-# smart ordering of slots
-for slot in slotdict.keys():
-    #get each slots sum of preferences over all students
-    ordered_slots[slot] = df_original[slot].sum(axis = 0)
-
-ordered_slotdict = {k: v for k, v in sorted(ordered_slots.items(), key=lambda item: item[1])}
-for slot in ordered_slotdict:
-    ordered_slotdict[slot] = slotdict[slot]
+ordered_slots = get_order(df_original)
 print(ordered_slotdict)
 #shirley's schedule
 real_data = {"M_7" : ['Tajreen Ahmed', 'Urvashi Uberoy', 'Ze-Xin Koh', 'Kyle Johnson', 'Ariel Rakovitsky', 'Caroline di Vittorio', 'Khyati Agrawal', 'Annie Zhou'], "M_9" : ['Cathleen Kong', 'HJ Suh', 'Ze-Xin Koh', 'Akash Pattnaik', 'Ariel Rakovitsky', 'Caroline di Vittorio'],"Tu_7" : ['Uri Schwartz','Alan Ding','Urvashi Uberoy','Akash Pattnaik','Bobby Morck'], "Tu_9" : ['Justin Chang','Alan Ding','Caio Costa','Bobby Morck'],"W_7" : ['Michelle Woo','Avi Bendory','Kawin Tiyawattanaroj','Tajreen Ahmed'], "W_9" : ['Michelle Woo','Avi Bendory','Kawin Tiyawattanaroj','Khyati Agrawal'],"Th_7" : ['Charlie Smith','Niranjan Shankar','Caio Costa','Ryan Golant'], "Th_9" : ['Charlie Smith','Arjun Devraj','Somya Arora','Jason Xu'],"F_7" : ['Annie Zhou','Nathan Alam','Sahan Paliskara','Connie Miao'], "F_9" : ['Somya Arora','Nathan Alam','Sahan Paliskara','Ryan Golant'],"Sa_3" : ['Anu Vellore','Ibrahim Ali Hashmi','Aditya Kohli','Lily Zhang','Ezra Zinberg'], "Sa_4" : ['Jackson Deitelzweig','Donovan Coronado','Jason Xu','Uri Schwartz','Ally Dalman','Catherine Yu'],"Sa_5" : ['Anu Vellore','Ibrahim Ali Hashmi','Connie Miao','Lily Zhang','Ezra Zinberg'],"Su_5" : ['Nala Sharadjaya','Arjun Devraj','Donovan Coronado','Niranjan Shankar'],"Su_6" : ['Kyle Johnson','Sandun Bambarandage','Jackson Deitelzweig'],"Su_7" : ['Yashodhar Govil','Shirley Z.','Aniela Macek','Chuk Uzoegwu','Nala Sharadjaya','Aditya Kohli'],"Su_8" : ['Cathleen Kong','Sandun Bambarandage','HJ Suh','Ally Dalman'], "Su_9" : ['Yashodhar Govil','Shirley Z.','Aniela Macek','Chuk Uzoegwu','Justin Chang','Catherine Yu']}
