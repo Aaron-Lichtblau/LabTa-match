@@ -29,8 +29,8 @@ def suggest(df, schedule, slot, student):
 
     #find candidates for swapping
     swap_cands_dict = check_swap(df, schedule, swap_stud)
-    print("An ordered list of possible swaps denoted as [student, slot] for : [", student, ", ", slot, "] is: ", swap_cands_dict[student])
-
+    # print("An ordered list of possible swaps denoted as [student, slot] for : [", student, ", ", slot, "] is: ", swap_cands_dict[student])
+    return(swap_cands_dict[student])
 
         #minimize loss of happiness subject to getting exp right
         #make sure swapped slot has good exp
@@ -119,6 +119,7 @@ def swap_TA(df, schedule, old_ta, old_slot, new_ta, new_slot):
     update_df(df, new_ta, old_slot)
 
 def update_df(df, student, slot):
+
     #update preference table
     score = df.at[student, slot]
 

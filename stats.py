@@ -10,7 +10,7 @@ NUM_SLOTS = 16.0 #number of slots
 NUM_STUDENTS = 45
 MAX_HAP = 258.0
 
-def exp_stats(df, schedule):
+def exp_stats(exp_dict, schedule):
     """prints stats on experience per slot"""
     # get and print average exp of each slot
     lowest = MAX_VALUE
@@ -19,8 +19,7 @@ def exp_stats(df, schedule):
     for slot in schedule:
         slot_exp = 0
         for student in schedule[slot]:
-            index = df.loc[df['name'] == student].index[0]
-            student_exp = df.at[index, 'experience']
+            student_exp = exp_dict[student]
             slot_exp += student_exp
         ave_exp = float(slot_exp) / float(len(schedule[slot]))
         ave_total += float(ave_exp) / NUM_SLOTS

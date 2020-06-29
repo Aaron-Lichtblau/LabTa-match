@@ -9,7 +9,6 @@ import stats
 from oauth2client.service_account import ServiceAccountCredentials
 import pandas as pd
 import numpy as np
-import past_exp_reader
 
 
 HOURS_LIMIT = 4 #limit of hours a TA can work
@@ -119,13 +118,11 @@ def get_order(df):
     for slot in slotdict.keys():
         #get each slots sum of preferences over all students
         ordered_slots[slot] = df[slot].sum(axis = 0)
-    #reorder based on values
-    ordered_slotdict = {k: v for k, v in sorted(ordered_slots.items(), key=lambda item: item[1])}
-    #put in the cap values for ordered dict
-    for slot in ordered_slotdict.keys():
-        ordered_slotdict[slot] = slotdict[slot]
 
-    return(ordered_slotdict)
+    ordered_slotdict = {k: v for k, v in sorted(ordered_slots.items(), key=lambda item: item[1])}
+    for slot in ordered_slotdict:
+        ordered_slotdict[slot] = slotdict[slot]
+    return(ordered_slots)
 #-------------------------------------------------------------------------------
 # Testing area
 #-------------------------------------------------------------------------------
@@ -138,56 +135,36 @@ def main():
     # Find workbook and open the first sheet
     sheet = client.open('LabTA_test2').sheet1
     df_original = pd.DataFrame(sheet.get_all_records())
-
-    #get order of slots
-    ordered_slotdict = get_order(df_original)
-
-    #make the schedule
-    blank_sched = Schedule()
-    schedule = scheduler(df_original, score, ordered_slotdict, blank_sched)
-
-    #find students who got 1 and do swaps
-    unhap_studs = swap.get_unhappy(df_original)
-    swap_dict = swap.check_swap(df_original, schedule, unhap_studs)
-    swap.correct_swap(df_original, schedule, unhap_studs, swap_dict)
-
-    #Evaluate happiness stats of schedule
-    print(df_original)
-    post_hap = stats.sched_happiness(df_original, schedule)
-    print('Total Happiness: ', post_hap[0])
-    print()
-    print('Availability to happiness correlation: ', post_hap[1])
-    print()
-    print('Variance of happiness: ', post_hap[2])
-    print()
-    print('Envy stats: ', post_hap[3])
-    print()
-    print('Incorrect stats: ', post_hap[4])
-    print()
+    json_before = df_original.to_json(orient='index')
+    df_copy = df_original
 
     #get experience dict
     students = []
     for stud_num in range(NUM_STUDENTS):
-        name = df_original.at[int(stud_num), "name"]
+        name = df.at[int(stud_num), "name"]
         students.append(name)
+
     exp_dict = past_exp_reader.get_exp('historical_data.csv', students)
+    print(exp_dict)
 
-    #Evaluate experience stats of schedule
-    stats.exp_stats(exp_dict, schedule)
-    response = True
-    while (response == True):
-        response = str(input("Want to swap a student out? (y/n): "))
-        if response == "y":
-            student = int(input("Enter student num to swap: "))
-            slot = str(input("Enter their slot to swap them out of: "))
-            swap.suggest(df_original, schedule, slot, student)
-            response = True
-        else:
-            reponse = False
-
-if __name__ == "__main__":
-    main()
-
+    ordered_slotdict = get_order(df_original)
+    print(ordered_slotdict)
+    #shirley's schedule
+    real_data = {"M_7" : ['Tajreen Ahmed', 'Urvashi Uberoy', 'Ze-Xin Koh', 'Kyle Johnson', 'Ariel Rakovitsky', 'Caroline di Vittorio', 'Khyati Agrawal', 'Annie Zhou'], "M_9" : ['Cathleen Kong', 'HJ Suh', 'Ze-Xin Koh', 'Akash Pattnaik', 'Ariel Rakovitsky', 'Caroline di Vittorio'],"Tu_7" : ['Uri Schwartz','Alan Ding','Urvashi Uberoy','Akash Pattnaik','Bobby Morck'], "Tu_9" : ['Justin Chang','Alan Ding','Caio Costa','Bobby Morck'],"W_7" : ['Michelle Woo','Avi Bendory','Kawin Tiyawattanaroj','Tajreen Ahmed'], "W_9" : ['Michelle Woo','Avi Bendory','Kawin Tiyawattanaroj','Khyati Agrawal'],"Th_7" : ['Charlie Smith','Niranjan Shankar','Caio Costa','Ryan Golant'], "Th_9" : ['Charlie Smith','Arjun Devraj','Somya Arora','Jason Xu'],"F_7" : ['Annie Zhou','Nathan Alam','Sahan Paliskara','Connie Miao'], "F_9" : ['Somya Arora','Nathan Alam','Sahan Paliskara','Ryan Golant'],"Sa_3" : ['Anu Vellore','Ibrahim Ali Hashmi','Aditya Kohli','Lily Zhang','Ezra Zinberg'], "Sa_4" : ['Jackson Deitelzweig','Donovan Coronado','Jason Xu','Uri Schwartz','Ally Dalman','Catherine Yu'],"Sa_5" : ['Anu Vellore','Ibrahim Ali Hashmi','Connie Miao','Lily Zhang','Ezra Zinberg'],"Su_5" : ['Nala Sharadjaya','Arjun Devraj','Donovan Coronado','Niranjan Shankar'],"Su_6" : ['Kyle Johnson','Sandun Bambarandage','Jackson Deitelzweig'],"Su_7" : ['Yashodhar Govil','Shirley Z.','Aniela Macek','Chuk Uzoegwu','Nala Sharadjaya','Aditya Kohli'],"Su_8" : ['Cathleen Kong','Sandun Bambarandage','HJ Suh','Ally Dalman'], "Su_9" : ['Yashodhar Govil','Shirley Z.','Aniela Macek','Chuk Uzoegwu','Justin Chang','Catherine Yu']}
+    real_sched = Schedule(real_data)
+    print("real schedule stats:")
+    stats.exp_stats(df_copy, real_sched)
+    real_hap = stats.sched_happiness(df_copy, real_sched)
+    print('Total Happiness: ', real_hap[0])
+    print()
+    print('Availability to happiness correlation: ', real_hap[1])
+    print()
+    print('Variance of happiness: ', real_hap[2])
+    print()
+    print('Envy stats: ', real_hap[3])
+    print()
+    print('Incorrect stats: ', real_hap[4])
+    print()
 
     # total_hap = []
     # corr = []
@@ -231,28 +208,59 @@ if __name__ == "__main__":
     # print('Incorrect stats: ')
     # print()
     # boxplot_stats(incorrect)
-    # use creds to create a client to interact with the Google Drive API
 
-# scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-# creds = ServiceAccountCredentials.from_json_keyfile_name('labTA-match-secret.json', scope)
-# client = gspread.authorize(creds)
-#
-# # Find workbook and open the first sheet
-# sheet = client.open('LabTA_test2').sheet1
-# df_copy = pd.DataFrame(sheet.get_all_records())
-# #shirley's schedule
-# real_data = {"M_7" : ['Tajreen Ahmed', 'Urvashi Uberoy', 'Ze-Xin Koh', 'Kyle Johnson', 'Ariel Rakovitsky', 'Caroline di Vittorio', 'Khyati Agrawal', 'Annie Zhou'], "M_9" : ['Cathleen Kong', 'HJ Suh', 'Ze-Xin Koh', 'Akash Pattnaik', 'Ariel Rakovitsky', 'Caroline di Vittorio'],"Tu_7" : ['Uri Schwartz','Alan Ding','Urvashi Uberoy','Akash Pattnaik','Bobby Morck'], "Tu_9" : ['Justin Chang','Alan Ding','Caio Costa','Bobby Morck'],"W_7" : ['Michelle Woo','Avi Bendory','Kawin Tiyawattanaroj','Tajreen Ahmed'], "W_9" : ['Michelle Woo','Avi Bendory','Kawin Tiyawattanaroj','Khyati Agrawal'],"Th_7" : ['Charlie Smith','Niranjan Shankar','Caio Costa','Ryan Golant'], "Th_9" : ['Charlie Smith','Arjun Devraj','Somya Arora','Jason Xu'],"F_7" : ['Annie Zhou','Nathan Alam','Sahan Paliskara','Connie Miao'], "F_9" : ['Somya Arora','Nathan Alam','Sahan Paliskara','Ryan Golant'],"Sa_3" : ['Anu Vellore','Ibrahim Ali Hashmi','Aditya Kohli','Lily Zhang','Ezra Zinberg'], "Sa_4" : ['Jackson Deitelzweig','Donovan Coronado','Jason Xu','Uri Schwartz','Ally Dalman','Catherine Yu'],"Sa_5" : ['Anu Vellore','Ibrahim Ali Hashmi','Connie Miao','Lily Zhang','Ezra Zinberg'],"Su_5" : ['Nala Sharadjaya','Arjun Devraj','Donovan Coronado','Niranjan Shankar'],"Su_6" : ['Kyle Johnson','Sandun Bambarandage','Jackson Deitelzweig'],"Su_7" : ['Yashodhar Govil','Shirley Z.','Aniela Macek','Chuk Uzoegwu','Nala Sharadjaya','Aditya Kohli'],"Su_8" : ['Cathleen Kong','Sandun Bambarandage','HJ Suh','Ally Dalman'], "Su_9" : ['Yashodhar Govil','Shirley Z.','Aniela Macek','Chuk Uzoegwu','Justin Chang','Catherine Yu']}
-# real_sched = Schedule(real_data)
-# print("real schedule stats:")
-# stats.exp_stats(df_copy, real_sched)
-# real_hap = stats.sched_happiness(df_copy, real_sched)
-# print('Total Happiness: ', real_hap[0])
-# print()
-# print('Availability to happiness correlation: ', real_hap[1])
-# print()
-# print('Variance of happiness: ', real_hap[2])
-# print()
-# print('Envy stats: ', real_hap[3])
-# print()
-# print('Incorrect stats: ', real_hap[4])
-# print()
+
+    sheet = client.open('LabTA_test2').sheet1
+    df_original = pd.DataFrame(sheet.get_all_records())
+    blank_sched = Schedule()
+    schedule = scheduler(df_original, score, ordered_slotdict, blank_sched)
+
+    unhap_studs = swap.get_unhappy(df_original)
+    swap_dict = swap.check_swap(df_original, schedule, unhap_studs)
+    swap.correct_swap(df_original, schedule, unhap_studs, swap_dict)
+    print(df_original)
+    #Evaluate happiness stats of schedule
+    post_hap = stats.sched_happiness(df_original, schedule)
+    print('Total Happiness: ', post_hap[0])
+    print()
+    print('Availability to happiness correlation: ', post_hap[1])
+    print()
+    print('Variance of happiness: ', post_hap[2])
+    print()
+    print('Envy stats: ', post_hap[3])
+    print()
+    print('Incorrect stats: ', post_hap[4])
+    print()
+
+    #Evaluate experience stats of schedule
+    stats.exp_stats(df_original, schedule)
+    response = True
+    while (response == True):
+        response = str(input("Want to swap a student out? (y/n): "))
+        if response == "y":
+            student = int(input("Enter student num to swap: "))
+            slot = str(input("Enter their slot to swap them out of: "))
+            swap.suggest(df_original, schedule, slot, student)
+            response = True
+        else:
+            reponse = False
+    # unhap_studs = get_unhappy(df_original)
+    # check_swap(df_original, schedule, unhap_studs)
+    # post_hap = sched_happiness(df_original, schedule)
+    # print('Total Happiness: ', post_hap[0])
+    # print()
+    # print('Availability to happiness correlation: ', post_hap[1])
+    # print()
+    # print('Variance of happiness: ', post_hap[2])
+    # print()
+    # print('Envy stats: ', post_hap[3])
+    # print()
+    # print('Incorrect stats: ', post_hap[4])
+    # print()
+
+    # print("LabTA Schedule:")
+    # schedule.print_sched()
+    # print("my schedule stats:")
+    # exp_stats(schedule)
+    # sched_happiness(schedule)
+    # json_after = df.to_json(orient='index')
