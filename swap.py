@@ -10,20 +10,6 @@ NUM_STUDENTS = 45
 
 def suggest(df, schedule, slot, student):
     """suggests a swap given student in a slot with too little or too much experience"""
-
-    #get experience of slot and make student exp dict
-    stud_exp_dict = {}
-    slot_exp = 0
-    for stud in schedule[slot]:
-        #get students index
-        stud_id = df[df['name'] == stud].index[0]
-        #get experience of student
-        stud_exp = df.at[stud_id, 'experience']
-        #put in dict and update slot exp
-        stud_exp_dict[stud_id] = stud_exp
-        slot_exp += stud_exp
-    avg_exp = float(slot_exp) / float(len(schedule[slot]))
-
     swap_stud = {}
     swap_stud[student] = slot
 
@@ -32,9 +18,6 @@ def suggest(df, schedule, slot, student):
     # print("An ordered list of possible swaps denoted as [student, slot] for : [", student, ", ", slot, "] is: ", swap_cands_dict[student])
     return(swap_cands_dict[student])
 
-        #minimize loss of happiness subject to getting exp right
-        #make sure swapped slot has good exp
-    #print out the swap that was made
 
 def check_swap(df, old_sched, unhap_studs):
     """find possible swaps for different TAs to resolve incorrectness """

@@ -23,6 +23,38 @@ NUM_STUDENTS = 45
 MAX_HAP = 258.0
 score = 3
 
+def get_overlaps(df, schedule):
+    '''returns a dict of {overlapping students: their time slot}'''
+    overlap_dict = {}
+    #find students that are working in both key and value of overlaps
+    for slot in OVERLAPS.keys():
+        for student in range(NUM_STUDENTS):
+            name = df.at[student, "name"]
+            if (name in schedule[OVERLAPS[slot]]) and (name in schedule[slot]):
+                overlap_dict[name] = slot
+    return(overlap_dict)
+
+def resolve_overlaps(df, max_weight_sched, overlaps):
+    '''resolves all overlaps in schedule'''
+    infinite_loop = 0
+    while(len(overlaps.keys()) > 0):
+        infinite_loop += 1
+        student = next(iter(overlaps))
+        old_slot = overlaps[student]
+        old_ta = df.loc[df['name'] == student].index[0]
+        #get top suggestion
+        if infinite_loop < 20:
+            swap_pair = swap.suggest(df, max_weight_sched, old_slot, old_ta)[0]
+        else:
+            swap_pair = swap.suggest(df, max_weight_sched, old_slot, old_ta)[1]
+            infinite_loop = 0
+        new_ta = swap_pair[0]
+        new_slot = swap_pair[1]
+        #swap student with top suggestion
+        swap.swap_TA(df, max_weight_sched, old_ta, old_slot, new_ta, new_slot)
+        overlaps = get_overlaps(df, max_weight_sched)
+        print(overlaps)
+
 
 def viable_cand(df, slot, score):
     """check for candidates who reported score on slot"""
