@@ -35,7 +35,7 @@ def get_student_nodes(name, student_nodes):
     #     tiered based on preferences
     #     ordered by availability given (so that it is incentive compatible to give all your preferences)
 #rank weight edges based on 1. preference 2. availability 3. happiness
-def weight_edge(df, student_node, slot_node, shift_cap):
+def weight_edge(df, student_node, slot_node):
     """returns the student-slot edge weight"""
     student = student_node.split("_")[0]
     j = student_node.split("_")[1]
@@ -55,7 +55,7 @@ def weight_edge(df, student_node, slot_node, shift_cap):
 
     #availability/cap/jth shift/student score tier
     avail = (float(df.at[student_index, "availability"]) / float(3 * NUM_SLOTS) * 2.5)
-    cap = (float(shift_cap[student]) / float(10) * 2.5)
+    cap = (float(df.at[student_index, "cap"]) / float(10) * 2.5)
     jth_shift = float(10 - int(j)) * 2.5
     stud_score = 2.5 #to be changed when students get performance scores
 
@@ -76,12 +76,15 @@ def order_sched(df, unordered_sched_dict):
     max_weight_sched = Schedule(max_weight_dict)
     return(max_weight_sched)
 
-def create_graph(df, shift_cap):
+def create_graph(df):
     ''''returns student nodes, slot nodes and dict of weights'''
     student_nodes = []
     students = list(df['name'])
+
     for student in students:
-        for shift in range(shift_cap[student]):
+        index = df.loc[df['name'] == student].index[0]
+        shift_cap = int(df.at[index, 'cap'])
+        for shift in range(shift_cap):
             student_nodes.append(str(student) + "_" + str(shift))
 
     slot_nodes = []
@@ -91,7 +94,7 @@ def create_graph(df, shift_cap):
     weights = {}
     for student in student_nodes:
         for slot in slot_nodes:
-            weights[(student, slot)] = weight_edge(df, student, slot, shift_cap)
+            weights[(student, slot)] = weight_edge(df, student, slot)
 
     wt = create_wt_doubledict(student_nodes, slot_nodes, weights)
     return(student_nodes, slot_nodes, wt)
@@ -199,13 +202,8 @@ def get_selected_edges(prob):
 def main():
     df = input_creator.get_df()
 
-    stud_shift_cap = {} #dict of students (keys) and max number of shifts they can work (values)
-    for student in list(df['name']):
-        stud_shift_cap[student] = STUD_SLOTS_WORKED_CAP #for now all students work max of 2 shifts
-    exp_dict = input_creator.get_exp('historical_data.csv', stud_shift_cap.keys()) #dict of students (keys) and number of semesters experience (values)
-
     #create graph nodes and weight edges
-    graph_data = create_graph(df, stud_shift_cap)
+    graph_data = create_graph(df)
     student_nodes = graph_data[0]
     slot_nodes = graph_data[1]
     wt = graph_data[2]

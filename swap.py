@@ -15,7 +15,7 @@ def suggest(df, schedule, slot, student):
 
     #find candidates for swapping
     swap_cands_dict = check_swap(df, schedule, swap_stud)
-    # print("An ordered list of possible swaps denoted as [student, slot] for : [", student, ", ", slot, "] is: ", swap_cands_dict[student])
+
     return(swap_cands_dict[student])
 
 
@@ -96,17 +96,16 @@ def swap_TA(df, schedule, old_ta, old_slot, new_ta, new_slot):
     schedule.add_student(old_slot, new_name)
     schedule.add_student(new_slot, old_name)
     #update df
-    update_df(df, old_ta, old_slot)
-    update_df(df, old_ta, new_slot)
-    update_df(df, new_ta, new_slot)
-    update_df(df, new_ta, old_slot)
+    update_df(df, old_name, old_slot)
+    update_df(df, old_name, new_slot)
+    update_df(df, new_name, new_slot)
+    update_df(df, new_name, old_slot)
 
 def update_df(df, student, slot):
     try:
         index = df.loc[df['name'] == student].index[0]
     except:
         print('student not found in df: ', student)
-        exit(0)
     #update preference table
     score = df.at[index, slot]
     df.at[index, slot] = -(score)

@@ -6,6 +6,7 @@ import random
 from schedule import Schedule
 import swap
 import stats
+import input_creator
 from oauth2client.service_account import ServiceAccountCredentials
 import pandas as pd
 import numpy as np
@@ -162,30 +163,23 @@ def get_order(df):
 # Testing area
 #-------------------------------------------------------------------------------
 def main():
-    # use creds to create a client to interact with the Google Drive API
-    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('labTA-match-secret.json', scope)
-    client = gspread.authorize(creds)
-
-    # Find workbook and open the first sheet
-    sheet = client.open('LabTA_test2').sheet1
-    df_original = pd.DataFrame(sheet.get_all_records())
+    df = input_creator.get_df()
 
     #get order of slots
-    ordered_slotdict = get_order(df_original)
+    ordered_slotdict = get_order(df)
 
     #make the schedule
     blank_sched = Schedule()
-    schedule = scheduler(df_original, score, ordered_slotdict, blank_sched)
+    schedule = scheduler(df, score, ordered_slotdict, blank_sched)
 
     #find students who got 1 and do swaps
-    unhap_studs = swap.get_unhappy(df_original)
-    swap_dict = swap.check_swap(df_original, schedule, unhap_studs)
-    swap.correct_swap(df_original, schedule, unhap_studs, swap_dict)
+    unhap_studs = swap.get_unhappy(df)
+    swap_dict = swap.check_swap(df, schedule, unhap_studs)
+    swap.correct_swap(df, schedule, unhap_studs, swap_dict)
 
     #Evaluate happiness stats of schedule
-    print(df_original)
-    post_hap = stats.sched_happiness(df_original, schedule)
+    print(df)
+    post_hap = stats.sched_happiness(df, schedule)
     print('Total Happiness: ', post_hap[0])
     print()
     print('Availability to happiness correlation: ', post_hap[1])
@@ -198,11 +192,10 @@ def main():
     print()
 
     #get experience dict
-    students = []
-    for stud_num in range(NUM_STUDENTS):
-        name = df_original.at[int(stud_num), "name"]
-        students.append(name)
-    exp_dict = input_creator.get_exp('historical_data.csv', students)
+    exp_dict = {}
+    students = list(df['name'])
+    for index in range(NUM_STUDENTS):
+        exp_dict[str(df.at[index, 'name'])] = int(df.at[index, 'experience'])
 
     #Evaluate experience stats of schedule
     stats.exp_stats(exp_dict, schedule)
@@ -212,7 +205,9 @@ def main():
         if response == "y":
             student = int(input("Enter student num to swap: "))
             slot = str(input("Enter their slot to swap them out of: "))
-            swap.suggest(df_original, schedule, slot, student)
+
+            swap_cands_list = swap.suggest(df, schedule, slot, student)
+            print("An ordered list of possible swaps denoted as [student, slot] for : [", student, ", ", slot, "] is: ", swap_cands_list)
             response = True
         else:
             reponse = False
@@ -228,8 +223,8 @@ if __name__ == "__main__":
     # incorrect = []
     # for i in range(20):
     #     sheet = client.open('LabTA_test2').sheet1
-    #     df_original = pd.DataFrame(sheet.get_all_records())
-    #     df_copy = df_original
+    #     df = pd.DataFrame(sheet.get_all_records())
+    #     df_copy = df
     #     blank_sched = Schedule()
     #     schedule = scheduler(df_copy, score, slotdict, blank_sched)
     #     hap_stats = sched_happiness(df_copy, schedule)
