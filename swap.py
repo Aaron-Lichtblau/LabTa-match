@@ -102,17 +102,20 @@ def swap_TA(df, schedule, old_ta, old_slot, new_ta, new_slot):
     update_df(df, new_ta, old_slot)
 
 def update_df(df, student, slot):
-
+    try:
+        index = df.loc[df['name'] == student].index[0]
+    except:
+        print('student not found in df: ', student)
+        exit(0)
     #update preference table
-    score = df.at[student, slot]
-
-    df.at[student, slot] = -(score)
+    score = df.at[index, slot]
+    df.at[index, slot] = -(score)
     #update hours worked and happiness
-    temp_work = df.at[student, 'hours']
-    temp_hap = df.at[student, 'happiness']
-    if df.at[student, slot] < 0: #shows they added slot
-        df.at[student, 'hours'] = (temp_work + 2)
-        df.at[student, 'happiness'] = (temp_hap + score)
+    temp_work = df.at[index, 'hours']
+    temp_hap = df.at[index, 'happiness']
+    if df.at[index, slot] < 0: #shows they added slot
+        df.at[index, 'hours'] = (temp_work + 2)
+        df.at[index, 'happiness'] = (temp_hap + score)
     else:
-        df.at[student, 'hours'] = (temp_work - 2)
-        df.at[student, 'happiness'] = (temp_hap + score)
+        df.at[index, 'hours'] = (temp_work - 2)
+        df.at[index, 'happiness'] = (temp_hap + score)

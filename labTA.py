@@ -9,7 +9,6 @@ import stats
 from oauth2client.service_account import ServiceAccountCredentials
 import pandas as pd
 import numpy as np
-import past_exp_reader
 
 
 HOURS_LIMIT = 4 #limit of hours a TA can work
@@ -140,9 +139,10 @@ def scheduler(df, score, slotdict, schedule):
 def schedule_to_df(df, schedule):
     """given a schedule, this updates the starting dataframe of preferences"""
     for slot in schedule:
+        if (len(slot) == 0):
+            print('empty slot in schedule ERROR!')
         for student in schedule[slot]:
-            index = df.loc[df['name'] == student].index[0]
-            swap.update_df(df, index, slot)
+            swap.update_df(df, student, slot)
 
 def get_order(df):
     """returns order of slots to fill in for creation of schedule"""
@@ -202,7 +202,7 @@ def main():
     for stud_num in range(NUM_STUDENTS):
         name = df_original.at[int(stud_num), "name"]
         students.append(name)
-    exp_dict = past_exp_reader.get_exp('historical_data.csv', students)
+    exp_dict = input_creator.get_exp('historical_data.csv', students)
 
     #Evaluate experience stats of schedule
     stats.exp_stats(exp_dict, schedule)

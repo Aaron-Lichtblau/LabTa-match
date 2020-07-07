@@ -9,13 +9,18 @@ import swap
 import re
 import json
 import input_creator
+import output_creator
 from oauth2client.service_account import ServiceAccountCredentials
 
 
 STUD_SLOTS_WORKED_CAP = 2
+
 NUM_STUDENTS = 45
 OVERLAPS = {'Sa_4': ['Sa_3'], 'Sa_5':['Sa_4'], 'Su_6':['Su_5'], 'Su_7':['Su_6'], 'Su_8':['Su_7'], 'Su_9':['Su_8']} #dict of slots to check as keys, and overlapping slots as values
 slotdict = {"M_7" : 8, "M_9" : 6,"Tu_7" : 5, "Tu_9" : 4,"W_7" : 4, "W_9" : 4,"Th_7" : 4, "Th_9" : 4,"F_7" : 4, "F_9" : 4,"Sa_3" : 5, "Sa_4" : 6,"Sa_5" : 5,"Su_5" : 4,"Su_6" : 3,"Su_7" : 6,"Su_8" : 4, "Su_9" : 6}
+NUM_SLOTS = 0 #gets number of slots
+for slot in slotdict:
+    NUM_SLOTS += slotdict[slot]
 
 def get_student_nodes(name, student_nodes):
     '''gets a student's nodes given their name'''
@@ -30,19 +35,32 @@ def get_student_nodes(name, student_nodes):
     #     tiered based on preferences
     #     ordered by availability given (so that it is incentive compatible to give all your preferences)
 #rank weight edges based on 1. preference 2. availability 3. happiness
-def weight_edge(df, student_node, slot_node):
+def weight_edge(df, student_node, slot_node, shift_cap):
     """returns the student-slot edge weight"""
-
     student = student_node.split("_")[0]
     j = student_node.split("_")[1]
-
-    pref_coef = 100
-    #get their preference score * 100
     student_index = df.loc[df['name'] == student].index[0]
-    pref_score = (df.at[student_index, slot_node] * pref_coef)
-    #add their availability score
-    avail_score = df.at[student_index, "availability"]
-    weight = pref_score + avail_score
+    weight = 0
+    tier = NUM_SLOTS * 10
+
+    # is pref a 2 or 3?
+    pref = df.at[student_index, slot_node]
+    if pref == 2 or pref == 3:
+        weight += (tier)**4
+    # is it their first shift?
+    if int(j) == 0:
+        weight += (tier)**3
+    # weight based on preference
+    weight += (pref *  (tier**2))
+
+    #availability/cap/jth shift/student score tier
+    avail = (float(df.at[student_index, "availability"]) / float(3 * NUM_SLOTS) * 2.5)
+    cap = (float(shift_cap[student]) / float(10) * 2.5)
+    jth_shift = float(10 - int(j)) * 2.5
+    stud_score = 2.5 #to be changed when students get performance scores
+
+    weight += (avail + cap + jth_shift + stud_score) * tier
+    weight = int(weight * 100) #make sure there are no decimals
     return (weight)
 
 def order_sched(df, unordered_sched_dict):
@@ -73,7 +91,7 @@ def create_graph(df, shift_cap):
     weights = {}
     for student in student_nodes:
         for slot in slot_nodes:
-            weights[(student, slot)] = weight_edge(df, student, slot)
+            weights[(student, slot)] = weight_edge(df, student, slot, shift_cap)
 
     wt = create_wt_doubledict(student_nodes, slot_nodes, weights)
     return(student_nodes, slot_nodes, wt)
@@ -105,6 +123,13 @@ def solve_wbm(from_nodes, to_nodes, wt):
                    for v in to_nodes]), "Total weights of selected edges"
 
 
+    for v in to_nodes:
+       #A) For all k, \sum_{i,j} x(i,j,k) \leq c_k (for each slot, have at most c_k students in that slot).
+       prob += lpSum([choices[u][v] for u in from_nodes]) <= slotdict[v], ""
+    for u in from_nodes:
+        #B) For all i, j, \sum_k x(i,j,k) \leq 1 (a student can only use their jth shift once)
+        prob += lpSum([choices[u][v] for v in to_nodes]) <= 1, ""
+
     # Constraint set ensuring that the total from/to each node
     # is less than its capacity
     for u in from_nodes:
@@ -112,10 +137,6 @@ def solve_wbm(from_nodes, to_nodes, wt):
         name = u.split('_')[:1][0]
         j_nodes = get_student_nodes(name, from_nodes)
         for v in to_nodes:
-            #A) For all k, \sum_{i,j} x(i,j,k) \leq c_k (for each slot, have at most c_k students in that slot).
-            prob += lpSum([choices[u][v] for u in from_nodes]) <= slotdict[v], ""
-            #B) For all i, j, \sum_k x(i,j,k) \leq 1 (a student can only use their jth shift once)
-            prob += lpSum([choices[u][v] for v in to_nodes]) <= 1, ""
             # C) For all i, k, \sum_j x(i,j,k) \leq 1 (a student can be in a slot only once)
             prob += lpSum([choices[u][v] for u in j_nodes]) <= 1, ""
             # D) For all i, and all k, k' which are overlapping, \sum_j x(i,j,k) + x(i,j,k') \leq 1 (student cannot take overlapping shifts).
@@ -145,8 +166,13 @@ def get_solution(prob):
     for v in prob.variables():
         if v.varValue > 1e-3:
             stud_slot = str(v).split('_')[1:]
-            slot = stud_slot[3] + "_" + stud_slot[4]
-            stud = stud_slot[0] + " " + stud_slot[1]
+            length = len(stud_slot)
+            slot = stud_slot[length - 2] + "_" + stud_slot[length - 1]
+            stud = ''
+            for i in range(int(length - 3)):
+                stud += (stud_slot[i] + " ")
+            stud = stud[:-1]
+
             if slot in sched_dict:
                 sched_dict[slot].append(stud)
             else:
@@ -188,7 +214,7 @@ def main():
     p = solve_wbm(student_nodes, slot_nodes, wt)
     unordered_sched_dict = get_solution(p)
     max_weight_sched = order_sched(df, unordered_sched_dict)
-    # Schedule.print_sched(max_weight_sched)
+    Schedule.print_sched(max_weight_sched)
     labTA.schedule_to_df(df, max_weight_sched)
 
     for slot in max_weight_sched:
@@ -197,8 +223,8 @@ def main():
             print(slot, " not full, needs: ", diff, " ta's")
 
     # #make list of overlap students and resolve them
-    overlaps = labTA.get_overlaps(df, max_weight_sched)
-    print(overlaps)
+    # overlaps = labTA.get_overlaps(df, max_weight_sched)
+    # print(overlaps)
     # resolve_overlaps(df, max_weight_sched, overlaps)
 
     print(df)
@@ -215,5 +241,7 @@ def main():
     print('Incorrect stats: ', post_hap[4])
     print()
 
+    #make output schedule in sheet
+    # output_creator.make_sheet(max_weight_sched)
 if __name__ == "__main__":
     main()
