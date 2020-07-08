@@ -110,6 +110,7 @@ def create_wt_doubledict(from_nodes, to_nodes, weights):
     for k,val in weights.items():
         u,v = k[0], k[1]
         wt[u][v] = val
+
     return(wt)
 
 def solve_wbm(from_nodes, to_nodes, wt):
@@ -239,6 +240,57 @@ def main():
     print('Incorrect stats: ', post_hap[4])
     print()
 
+    #get experience dict
+    exp_dict = {}
+    students = list(df['name'])
+    for index in range(NUM_STUDENTS):
+        exp_dict[str(df.at[index, 'name'])] = int(df.at[index, 'experience'])
+
+    #Evaluate experience stats of schedule
+    stats.exp_stats(exp_dict, max_weight_sched)
+    response = True
+    while (response == True):
+        response = str(input("Want to swap a student out? (y/n): "))
+        if response == "y":
+            student = str(input("Enter student to swap: "))
+            slot = str(input("Enter their slot to swap them out of: "))
+
+            #check student and slot are good inputs
+            if student not in list(df['name']):
+                print('student given is not in schedule')
+                exit(0)
+            if slot not in slotdict.keys():
+                print('slot given is not in schedule')
+                exit(0)
+
+            swap_cands_dict = swap.max_weight_suggest(max_weight_sched, p, wt, slot, student)
+            accept_swap  = False
+            while (accept_swap == False):
+                for cand in swap_cands_dict.keys():
+                    #print out top candidate edge
+                    print(cand)
+                    #ask to accept or not
+                    response = str(input("Want to accept proposed swap? (y/n): "))
+                    if response == 'y':
+                        accept_swap = True
+
+                        stud_slot = str(cand).split('_')
+                        length = len(stud_slot)
+
+                        #get the new ta
+                        new_ta = ''
+                        for i in range(int(length - 3)):
+                            new_ta += (stud_slot[i] + " ")
+                        new_ta = new_ta[:-1]
+
+                        #get the new slot
+                        new_slot = stud_slot[length - 2] + "_" + stud_slot[length - 1]
+
+                        swap.swap_TA(df, max_weight_sched, student, slot, new_ta, new_slot)
+                        break
+
+        else:
+            response = False
     #make output schedule in sheet
     # output_creator.make_sheet(max_weight_sched)
 if __name__ == "__main__":

@@ -18,6 +18,63 @@ def suggest(df, schedule, slot, student):
 
     return(swap_cands_dict[student])
 
+def max_weight_suggest(schedule, problem, wt, slot, student):
+    """suggests a swap given student in a slot with too little or too much experience"""
+    student = str(student).replace(" ", "_")
+    student = student.replace("-", "_")
+
+    # go through all edges in matching to find edge to be swapped out
+    for v in problem.variables():
+        if v.varValue > 1e-3:
+            #get student-slot variable
+            if student in str(v) and slot in str(v):
+                old_stud_slot = str(v).split('_')[1:]
+                length = len(old_stud_slot)
+                # get old slot
+                old_slot = old_stud_slot[length - 2] + "_" + old_stud_slot[length - 1]
+                #get old student
+                old_student = ''
+                for i in range(int(length - 3)):
+                    old_student += (old_stud_slot[i] + " ")
+                old_student = old_student[:-1]
+                old_student += ("_" + old_stud_slot[length-3])
+
+    suggested_swaps_unordered = {}
+    # go through all other edges in matching to find best edges to be suggested
+    for v in problem.variables():
+        if v.varValue > 1e-3:
+            new_stud_slot = str(v).split('_')[1:] #get student-slot variable
+            length = len(new_stud_slot)
+            new_slot = new_stud_slot[length - 2] + "_" + new_stud_slot[length - 1] # get new slot
+            new_student = '' #get new student
+            for i in range(int(length - 3)):
+                new_student += (new_stud_slot[i] + " ")
+            new_student = new_student[:-1]
+            new_student += ("_" + new_stud_slot[length-3])
+
+            #get weights of variable edges and sum them
+            w1 = int(wt[old_student][new_slot])
+            w2 = int(wt[new_student][old_slot])
+            swap_sum = w1 + w2
+
+            #add new_student, new_slot, swap_weight to suggested swap
+            suggested_swaps_unordered[str(v)[2:]] = swap_sum
+
+    # reorder dict based on weights (values)
+    suggested_swaps = {k: v for k, v in sorted(suggested_swaps_unordered.items(), key=lambda x: x[1], reverse=True)}
+
+    #take students already in slot out of suggested list
+    bad_edge_list = []
+    for bad_stud in schedule[slot]:
+        bad_stud = bad_stud.replace(" ", "_")
+        for key in suggested_swaps.keys():
+            if str(bad_stud) in str(key):
+                bad_edge_list.append(key)
+
+    for bad_edge in bad_edge_list:
+        del suggested_swaps[bad_edge]
+
+    return(suggested_swaps)
 
 def check_swap(df, old_sched, unhap_studs):
     """find possible swaps for different TAs to resolve incorrectness """
@@ -87,19 +144,18 @@ def get_unhappy(df):
                 unhap_studs[student] = slot
     return(unhap_studs)
 
-def swap_TA(df, schedule, old_ta, old_slot, new_ta, new_slot):
+def swap_TA(df, sched, old_ta, old_slot, new_ta, new_slot):
     """swap ta's in the schedule at the given slots and update the dataframe"""
-    old_name = df.at[old_ta, 'name']
-    new_name = df.at[new_ta, 'name']
-    schedule.remove_student(old_slot, old_name)
-    schedule.remove_student(new_slot, new_name)
-    schedule.add_student(old_slot, new_name)
-    schedule.add_student(new_slot, old_name)
+    sched.remove_student(old_slot, old_ta)
+    sched.remove_student(new_slot, new_ta)
+    sched.add_student(old_slot, new_ta)
+    sched.add_student(new_slot, old_ta)
     #update df
-    update_df(df, old_name, old_slot)
-    update_df(df, old_name, new_slot)
-    update_df(df, new_name, new_slot)
-    update_df(df, new_name, old_slot)
+    update_df(df, old_ta, old_slot)
+    update_df(df, old_ta, new_slot)
+    update_df(df, new_ta, new_slot)
+    update_df(df, new_ta, old_slot)
+
 
 def update_df(df, student, slot):
     try:

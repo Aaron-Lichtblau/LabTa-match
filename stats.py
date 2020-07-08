@@ -3,38 +3,30 @@ import json
 import random
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 
-MAX_VALUE = 10
-MIN_VALUE = 0
 NUM_SLOTS = 16.0 #number of slots
 NUM_STUDENTS = 45
 MAX_HAP = 258.0
 
 def exp_stats(exp_dict, schedule):
     """prints stats on experience per slot"""
-    # get and print average exp of each slot
-    lowest = MAX_VALUE
-    highest = MIN_VALUE
-    ave_total = MIN_VALUE
+    slot_exp_dict = {} #dict of slots and their avg exp
+
     for slot in schedule:
         slot_exp = 0
         for student in schedule[slot]:
             student_exp = exp_dict[student]
             slot_exp += student_exp
         ave_exp = float(slot_exp) / float(len(schedule[slot]))
-        ave_total += float(ave_exp) / NUM_SLOTS
-        if (ave_exp < lowest):
-            lowest = ave_exp
-        if (ave_exp > highest):
-            highest = ave_exp
-        print(slot, " has average experience: ", ave_exp)
-    # print("Summary of exp stats: ")
-    # # print lowest exp slot
-    # print("lowest average experience in a slot was: ", lowest)
-    # # print average slot exp
-    # print("average experience of each slot was: ", ave_total)
-    # # print highest exp slot
-    # print("highest average experience in a slot was: ", highest)
+        slot_exp_dict[str(slot)] = ave_exp
+    plt.figure(figsize=(10, 3))
+    plt.bar(list(slot_exp_dict.keys()), slot_exp_dict.values(), color='b', align='edge', width=0.3)
+    plt.title('Avg Experience of TAs per Slot')
+    plt.ylabel('Past Semesters Worked')
+    plt.xlabel('Slot')
+    plt.show()
+
 def boxplot_stats(data):
     data = np.array(data)
     print('median: ', np.median(data))
@@ -66,6 +58,7 @@ def sched_happiness(df, schedule):
             total_happiness += hap #update total happiness
             studhap[index] += hap #update each students' happiness
 
+    avg_hap = float(total_happiness) / float(NUM_STUDENTS)
     #normalize total happiness score
     total_happiness = float(total_happiness) / MAX_HAP
     #create a df from student happiness
@@ -102,7 +95,7 @@ def sched_happiness(df, schedule):
     # print('envy score: ', envy)
     # print('number incorrect: ', incorrect)
     corr = df['availability'].corr(df_hap['happiness'])
-    hap_stats = [total_happiness, corr, var[0], envy, incorrect]
+    hap_stats = [total_happiness, avg_hap, corr, var[0], envy, incorrect]
     return(hap_stats)
     # plt.hist(studhap, density=True, bins=30)  # `density=False` would make counts
     # plt.ylabel('Probability')

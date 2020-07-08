@@ -145,6 +145,7 @@ def schedule_to_df(df, schedule):
         for student in schedule[slot]:
             swap.update_df(df, student, slot)
 
+
 def get_order(df):
     """returns order of slots to fill in for creation of schedule"""
     ordered_slots = {}
