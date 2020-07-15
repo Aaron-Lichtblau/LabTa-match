@@ -1,4 +1,4 @@
-import json
+# import json
 
 class Schedule:
 
@@ -33,6 +33,6 @@ class Schedule:
             print('this student: ', student, " is already not in the schedule at this slot: ", slot)
         self.schedule[slot].remove(student)
 
-    def print_sched(self):
-        """prints out the schedule"""
-        print(json.dumps(self.schedule, indent=3))
+    # def print_sched(self):
+    #     """prints out the schedule"""
+    #     print(json.dumps(self.schedule, indent=3))

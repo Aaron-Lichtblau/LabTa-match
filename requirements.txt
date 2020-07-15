@@ -1,7 +1,7 @@
+oauth2client
 gspread
 pandas
 pulp
 numpy
-oauth2client
 matplotlib
 scipy
