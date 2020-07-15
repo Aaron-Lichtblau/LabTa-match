@@ -1,12 +1,7 @@
 from schedule import Schedule
 import pandas as pd
 
-
-
-OVERLAPS = {'Sa_4': 'Sa_3', 'Sa_5':'Sa_4', 'Su_6':'Su_5', 'Su_7':'Su_6', 'Su_8':'Su_7', 'Su_9':'Su_8'} #dict of slots to check as keys, and overlapping slots as values
-SLOTS = ["M_7", "M_9","Tu_7", "Tu_9","W_7", "W_9","Th_7", "Th_9","F_7", "F_9","Sa_3", "Sa_4","Sa_5","Su_5","Su_6","Su_7","Su_8", "Su_9"]
-NUM_SLOTS = 16.0 #number of slots
-NUM_STUDENTS = 45
+# NUM_STUDENTS = 45
 
 def suggest(df, schedule, slot, student):
     """suggests a swap given student in a slot with too little or too much experience"""
@@ -92,7 +87,7 @@ def check_swap(df, old_sched, unhap_studs):
         # get the student's unused 3's and 2's slots
         unused_slots = []
         unused2_slots = []
-        for slot in SLOTS:
+        for slot in old_sched.keys():
             if df.at[student, slot] == 3:
                 unused_slots.append(slot)
             if df.at[student, slot] == 2:
@@ -103,7 +98,7 @@ def check_swap(df, old_sched, unhap_studs):
         for cand in swap_candidates:
             swap_slots = []
             swap2_slots = []
-            for slot in SLOTS:
+            for slot in old_sched.keys():
                 if df.at[cand, slot] == -3:
                     swap_slots.append(slot)
                 if df.at[cand, slot] == -2:
@@ -136,13 +131,13 @@ def correct_swap(df, schedule, unhap_studs, swap_dict):
             else:
                 i += 1
 
-def get_unhappy(df):
-    unhap_studs = {}
-    for student in range(NUM_STUDENTS):
-        for slot in SLOTS:
-            if df.at[student, slot] == -1:
-                unhap_studs[student] = slot
-    return(unhap_studs)
+# def get_unhappy(df):
+#     unhap_studs = {}
+#     for student in range(NUM_STUDENTS):
+#         for slot in SLOTS:
+#             if df.at[student, slot] == -1:
+#                 unhap_studs[student] = slot
+#     return(unhap_studs)
 
 def swap_TA(df, sched, old_ta, old_slot, new_ta, new_slot):
     """swap ta's in the schedule at the given slots and update the dataframe"""
@@ -164,13 +159,15 @@ def update_df(df, student, slot):
         print('student not found in df: ', student)
     #update preference table
     score = df.at[index, slot]
+    cap = df.at[index, 'cap']
     df.at[index, slot] = -(score)
     #update hours worked and happiness
     temp_work = df.at[index, 'hours']
     temp_hap = df.at[index, 'happiness']
+    hap = (score * 100) / (3 * cap)
     if df.at[index, slot] < 0: #shows they added slot
         df.at[index, 'hours'] = (temp_work + 2)
-        df.at[index, 'happiness'] = (temp_hap + score)
+        df.at[index, 'happiness'] = (temp_hap + hap)
     else:
         df.at[index, 'hours'] = (temp_work - 2)
-        df.at[index, 'happiness'] = (temp_hap + score)
+        df.at[index, 'happiness'] = (temp_hap + hap)

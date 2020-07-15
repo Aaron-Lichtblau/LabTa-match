@@ -4,3 +4,4 @@ pulp
 numpy
 oauth2client
 matplotlib
+scipy

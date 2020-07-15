@@ -137,14 +137,6 @@ def scheduler(df, score, slotdict, schedule):
 
     return(schedule)
 
-def schedule_to_df(df, schedule):
-    """given a schedule, this updates the starting dataframe of preferences"""
-    for slot in schedule:
-        if (len(slot) == 0):
-            print('empty slot in schedule ERROR!')
-        for student in schedule[slot]:
-            swap.update_df(df, student, slot)
-
 
 def get_order(df):
     """returns order of slots to fill in for creation of schedule"""

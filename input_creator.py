@@ -5,7 +5,6 @@ import pandas as pd
 
 STUD_SLOTS_WORKED_CAP = 2 #default cap on work shifts
 
-
 def unflip(dict):
     # swap keys and values to unflip
     unflipped_dict = {}
@@ -63,7 +62,9 @@ def get_cap(cap_file, students):
 def get_stud_cap(students):
     cap_dict = {}
     for student in students:
-        cap_dict[student] = STUD_SLOTS_WORKED_CAP #for now all students work max of 2 shifts
+        cap_dict[student] = STUD_SLOTS_WORKED_CAP # for now all students work max of 2 shifts
+
+    cap_dict['Uri Schwartz'] = 15
     cap_list = []
     for student in students:
         cap_list.append(cap_dict[student])
@@ -86,5 +87,5 @@ def get_df():
     #get exp dict
     exp_dict = get_exp('historical_data.csv', students) #dict of students (keys) and number of semesters experience (values)
     df['experience'] = exp_dict #add experience column to df
-    
+
     return(df)
