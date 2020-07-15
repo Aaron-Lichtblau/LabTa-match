@@ -2,6 +2,8 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import csv
 import pandas as pd
+from random import choice
+from random import randint
 
 STUD_SLOTS_WORKED_CAP = 2 #default cap on work shifts
 
@@ -35,6 +37,14 @@ def get_exp(exp_file, students):
 
     return(exp_list)
 
+def make_exp(students):
+    exp_dist = [0, 0, 0, 1, 1, 1, 2, 2, 3, 3, 4]
+    exp_list = []
+    for student in students:
+        exp_list.append(choice(exp_dist))
+
+    return(exp_list)
+
 #this function can be used if a new column is added to the historical data.csv
 #file called "Cap" which has the student's cap on shifts they would work (2) if not given
 def get_cap(cap_file, students):
@@ -59,16 +69,50 @@ def get_cap(cap_file, students):
     return(cap_list)
 
 #function will be replaced by get_cap above
-def get_stud_cap(students):
+def make_cap(students):
+    cap_dist = [2, 2, 2, 2, 3, 3, 3, 4, 4, 5, 6, 7] # dist of sample caps
     cap_dict = {}
     for student in students:
-        cap_dict[student] = STUD_SLOTS_WORKED_CAP # for now all students work max of 2 shifts
+        cap_dict[student] = choice(cap_dist)
 
-    cap_dict['Uri Schwartz'] = 15
     cap_list = []
     for student in students:
         cap_list.append(cap_dict[student])
     return(cap_list)
+
+def make_df():
+    df = pd.DataFrame()
+
+    SLOTS = ["M_7", "M_9","Tu_7", "Tu_9","W_7", "W_9","Th_7", "Th_9","F_7", "F_9","Sa_3", "Sa_4","Sa_5","Su_5","Su_6","Su_7","Su_8", "Su_9"]
+    STUDENTS = ['Aaron', 'Alfred', 'Bob', 'Billy J', 'Charlie', 'Chet B','Danielle', 'Demetris','Evan', 'Faris', 'Gandalf','Genna', 'Harrold', 'Immanuel','Indiana J','Jack', 'Jason B', 'Kerry', 'Lucy', 'Marrian', 'MJ', 'Nora', 'Oswald', 'Peter', 'Quincy', 'Reese', 'Sandra', 'Theodore', 'Uri', 'Val', 'Wally', 'Xerxes', 'Yang', 'Zachariah']
+    row_nums = len(STUDENTS)
+
+    df['name'] = STUDENTS #make name column
+    avail_col = [0] * row_nums #make availability column
+    for slot in SLOTS: #make slot columns
+        slot_col = []
+        for student in range(row_nums):
+            pref = randint(0, 3)
+            slot_col.append(pref)
+            avail_col[student] += pref
+        df[slot] = slot_col
+    slot_type_col = [] #make slot type column
+    for student in range(row_nums):
+        types = [0, 2, 4]
+        slot_type_col.append(choice(types))
+    df['slot_type'] = slot_type_col
+    hours_col = [0] * row_nums #make hours column
+    df['hours'] = hours_col
+    df['availability'] = avail_col #put in availability column
+    hap_col = [0] * row_nums #make happiness column
+    df['happiness'] = hap_col
+    shift_cap_list = make_cap(STUDENTS)
+    df['cap'] = shift_cap_list #add cap column to df
+    #get exp dict
+    exp_list = make_exp(STUDENTS) #dict of students (keys) and number of semesters experience (values)
+    df['experience'] = exp_list #add experience column to df
+
+    return(df)
 
 def get_df():
     '''gets the dataframe from google sheet'''

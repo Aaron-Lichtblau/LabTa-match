@@ -384,17 +384,17 @@ def get_selected_edges(prob):
 # Testing area
 #-------------------------------------------------------------------------------
 def main():
-    df = input_creator.get_df()
+    df = input_creator.make_df()
 
     #example weights
     weight_dict = {}
 
 
-    weight_dict['slot_type'] = 6
-    weight_dict['no_1'] = 5
-    weight_dict['guarantee_shift'] = 4
-    weight_dict['avail'] = 8
-    weight_dict['shift_cap'] = 7
+    weight_dict['slot_type'] = 7
+    weight_dict['no_1'] = 9
+    weight_dict['guarantee_shift'] = 6
+    weight_dict['avail'] = 4
+    weight_dict['shift_cap'] = 3
     weight_dict['equality'] = 3
 
 
