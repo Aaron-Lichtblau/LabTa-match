@@ -24,6 +24,24 @@ def exp_stats(exp_dict, schedule):
     plt.xlabel('Slot')
     plt.show()
 
+def skill_stats(skill_dict, schedule):
+    """prints stats on skill per slot"""
+    slot_skill_dict = {} #dict of slots and their avg exp
+
+    for slot in schedule:
+        slot_skill = 0
+        for student in schedule[slot]:
+            student_skill = skill_dict[student]
+            slot_skill += student_skill
+        ave_skill = float(slot_skill) / float(len(schedule[slot]))
+        slot_skill_dict[str(slot)] = ave_skill
+    plt.figure(figsize=(10, 3))
+    plt.bar(list(slot_skill_dict.keys()), slot_skill_dict.values(), color='b', align='edge', width=0.3)
+    plt.title('Avg Skill of TAs per Slot')
+    plt.ylabel('Past Semesters Worked')
+    plt.xlabel('Slot')
+    plt.show()
+
 def boxplot_stats(data):
     data = np.array(data)
     print('median: ', np.median(data))
@@ -106,5 +124,5 @@ def sched_happiness(df, schedule, prev_slot):
         if wrong_type[id] == True:
             wrong_type_studs.append(df.at[id, 'name'])
 
-    hap_stats = [avg_hap, corr, var[0], min_students, max_students, stud_1s, shiftless, wrong_type_studs]
+    hap_stats = [avg_hap, corr, var[0], min_students, max_students, stud_1s, shiftless, wrong_type_studs, wrong_type]
     return(hap_stats)

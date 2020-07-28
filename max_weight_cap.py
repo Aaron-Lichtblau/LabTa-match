@@ -5,19 +5,39 @@ import pandas as pd
 from schedule import Schedule
 import stats
 import swap
+import time
+import random
 # import re
 # import json
 import input_creator
 # import output_creator
 from oauth2client.service_account import ServiceAccountCredentials
 
-OVERLAPS = {'Sa_4': ['Sa_3'], 'Sa_5':['Sa_4'], 'Su_6':['Su_5'], 'Su_7':['Su_6'], 'Su_8':['Su_7'], 'Su_9':['Su_8']} #dict of slots to check as keys, and overlapping slots as values
-PREV_SLOT = {'M_9': 'M_7', 'Tu_9': 'Tu_7', 'W_9': 'W_7', 'Th_9': 'Th_7', 'F_9': 'F_7', 'Sa_5': 'Sa_3', 'Su_7': 'Su_5', 'Su_8': 'Su_6', 'Su_9': 'Su_7'} #dict of slots and their prev slots
-slotdict = {"M_7" : 8, "M_9" : 6,"Tu_7" : 5, "Tu_9" : 4,"W_7" : 4, "W_9" : 4,"Th_7" : 4, "Th_9" : 4,"F_7" : 4, "F_9" : 4,"Sa_3" : 5, "Sa_4" : 6,"Sa_5" : 5,"Su_5" : 4,"Su_6" : 3,"Su_7" : 6,"Su_8" : 4, "Su_9" : 6}
-NUM_SLOTS = 0 #gets number of slots
-for slot in slotdict:
-    NUM_SLOTS += slotdict[slot]
+#check if there are enough shifts allocated to give everyone 2 shifts
+def check_slotdict(df, slotdict, flex_shifts):
+    total_slots = 0
+    for slot in slotdict:
+        total_slots += int(slotdict[slot])
+    num_students = len(df['name'])
+    missing_slots = (2 * num_students) - int(total_slots) - flex_shifts
+    if missing_slots < 0:
+        missing_slots = 0
+    return (missing_slots)
 
+def order_sched(df, unordered_sched_dict, slotdict):
+    '''takes unordered sched dict and returns an ordered Schedule object'''
+    ordered_sched = {k: unordered_sched_dict[k] for k in slotdict.keys()}
+    max_weight_dict = {}
+    for slot in ordered_sched:
+        max_weight_dict[slot] = []
+        for student in ordered_sched[slot]:
+            name = student.split("_")[0]
+            max_weight_dict[slot].append(name)
+
+    max_weight_sched = Schedule(max_weight_dict)
+    return(max_weight_sched)
+
+#convert a schedule into a df
 def schedule_to_df(df, schedule):
     """given a schedule, this updates the starting dataframe of preferences"""
     for slot in schedule:
@@ -26,25 +46,11 @@ def schedule_to_df(df, schedule):
         for student in schedule[slot]:
             swap.update_df(df, student, slot)
 
-def get_student_nodes(name, student_nodes):
-    '''gets a student's nodes given their name'''
-    name_nodes = []
-    for node in student_nodes:
-        if (node.split("_")[:1][0] == name):
-            name_nodes.append(node)
-    return name_nodes
+#-------------------------------------------------------------------------------
+# Weight Area
+#-------------------------------------------------------------------------------
 
-def get_slot(slot_node):
-    slot = slot_node[:-2]
-    return(slot)
-
-def get_hours(slot_node):
-    slot_type = slot_node[-1]
-    if int(slot_type) == 1:
-        return(4)
-    else:
-        return(2)
-
+#split weight inputs into tiers and emphasis dicts
 def get_tier_emph(weight_dict):
     tier_dict = {}
     emph_dict = {}
@@ -57,7 +63,7 @@ def get_tier_emph(weight_dict):
             emph_dict[weight] = weight_dict[weight]
     return [tier_dict, emph_dict]
 
-def weight_edge(df, student_node, slot_node, weight_dict):
+def weight_edge(df, student_node, slot_node, weight_dict, NUM_SLOTS):
     #returns the student-slot edge weight
 
     student = student_node.split("_")[0]
@@ -124,20 +130,11 @@ def weight_edge(df, student_node, slot_node, weight_dict):
 
     return (weight)
 
-def order_sched(df, unordered_sched_dict):
-    '''takes unordered sched dict and returns an ordered Schedule object'''
-    ordered_sched = {k: unordered_sched_dict[k] for k in slotdict.keys()}
-    max_weight_dict = {}
-    for slot in ordered_sched:
-        max_weight_dict[slot] = []
-        for student in ordered_sched[slot]:
-            name = student.split("_")[0]
-            max_weight_dict[slot].append(name)
+#-------------------------------------------------------------------------------
+# Graph Area
+#-------------------------------------------------------------------------------
 
-    max_weight_sched = Schedule(max_weight_dict)
-    return(max_weight_sched)
-
-def create_graph(df, weight_dict):
+def create_graph(df, weight_dict, slotdict, PREV_SLOT, NUM_SLOTS):
     ''''returns student nodes, slot nodes and dict of weights'''
     student_nodes = []
     students = list(df['name'])
@@ -153,14 +150,14 @@ def create_graph(df, weight_dict):
         slot_0 = str(slot) + "_0"
         slot_nodes.append(slot_0)
         #check if slot is potential 4 hr
-        if is_4hr(slot):
+        if is_4hr(slot, PREV_SLOT):
             slot_1 = str(slot) + "_1"
             slot_nodes.append(slot_1)
 
     weights = {}
     for student in student_nodes:
         for slot in slot_nodes:
-            weights[(student, slot)] = weight_edge(df, student, slot, weight_dict)
+            weights[(student, slot)] = weight_edge(df, student, slot, weight_dict, NUM_SLOTS)
 
     wt = create_wt_doubledict(student_nodes, slot_nodes, weights)
     return(student_nodes, slot_nodes, wt)
@@ -179,7 +176,11 @@ def create_wt_doubledict(from_nodes, to_nodes, weights):
 
     return(wt)
 
-def solve_wbm(from_nodes, to_nodes, wt):
+#-------------------------------------------------------------------------------
+# Solver Area
+#-------------------------------------------------------------------------------
+
+def solve_wbm(from_nodes, to_nodes, wt, slotdict, PREV_SLOT, OVERLAPS, MIN_EXP, exp_dict, MIN_SKILL, skill_dict, stress_slots, target_delta, flex_shifts):
     ''' A wrapper function that uses pulp to formulate and solve a WBM'''
 
     prob = LpProblem("WBM Problem", LpMaximize)
@@ -194,8 +195,8 @@ def solve_wbm(from_nodes, to_nodes, wt):
 
 # For all s, j, \sum_k x(s,k,j,1) + x(s,k,j,0) \leq 1. Guarantees that each slot is used at most once.
     for u in from_nodes:
-        for v in get_slot_type(to_nodes, 0):
-            x = get_alt_slot(v) #sees if slot is potential 4hr (has alternate node)
+        for v in get_slots_of_type(to_nodes, 0):
+            x = get_alt_slot(v, PREV_SLOT) #sees if slot is potential 4hr (has alternate node)
             if x != None:
                 prob += lpSum([choices[u][v] + choices[u][x]]) <= 1, ""
             else:
@@ -205,8 +206,11 @@ def solve_wbm(from_nodes, to_nodes, wt):
     for u in from_nodes:
         name = u.split('_')[:1][0]
         j_nodes = get_student_nodes(name, from_nodes)
-        for v in get_slot_type(to_nodes, 0):
-            x = get_alt_slot(v) #sees if slot is potential 4hr (has alternate node)
+        #get student's overlap dict
+        # min_gap = gap_dict[name]
+        # overlaps = input_creator.get_overlaps(slots, min_gap, duration)
+        for v in get_slots_of_type(to_nodes, 0):
+            x = get_alt_slot(v, PREV_SLOT) #sees if slot is potential 4hr (has alternate node)
             k = get_slot(v)
             if x != None and k in OVERLAPS.keys():
                 overlap_slots = OVERLAPS[k] #get overlap nodes as list
@@ -214,11 +218,11 @@ def solve_wbm(from_nodes, to_nodes, wt):
                 for slot in overlap_slots:
                     node_0 = str(slot)+"_0"
                     overlap_nodes.append(node_0)
-                    if is_4hr(slot):
+                    if is_4hr(slot, PREV_SLOT):
                         node_1 = str(slot)+"_1"
                         overlap_nodes.append(node_1)
                 for k in overlap_nodes:
-                    k_x = get_alt_slot(k)
+                    k_x = get_alt_slot(k, PREV_SLOT)
                     if k_x != None:
                         prob += lpSum([choices[u][v] + choices[u][x] + choices[u][k] + choices[u][k_x] for u in j_nodes]) <= 1, ""
                     else:
@@ -231,30 +235,49 @@ def solve_wbm(from_nodes, to_nodes, wt):
                 for slot in overlap_slots:
                     node_0 = str(slot)+"_0"
                     overlap_nodes.append(node_0)
-                    if is_4hr(slot):
+                    if is_4hr(slot, PREV_SLOT):
                         node_1 = str(slot)+"_1"
                         overlap_nodes.append(node_1)
                 for l in overlap_nodes:
                     prob += lpSum([choices[u][v] + choices[u][l] for u in j_nodes]) <= 1, ""
 
 
-# For all k, \sum_{s,j} x(s,k,j,1) + x(s,k,j,0) \leq c_k. Guarantees that each slot has at most c_k students.
-    for v in get_slot_type(to_nodes, 0):
+# Guarantees that total sum of shifts is slotdict sum + flex_shifts
+    total_shifts = 0
+    for slot in slotdict:
+        total_shifts += slotdict[slot]
+    total_shifts += flex_shifts
+    all_2hr_shifts = get_slots_of_type(to_nodes, 0)
+    all_4hr_shifts = get_slots_of_type(to_nodes, 1)
+    all_shifts = all_2hr_shifts + all_4hr_shifts
+    prob += lpSum([choices[u][v] for u in from_nodes for v in all_shifts]) <= total_shifts, ""
+
+
+# For all k, \sum_{s,j} x(s,k,j,1) + x(s,k,j,0) \leq c_k. Guarantees that each slot is within +target_delta ta of slotdict amount
+    for v in get_slots_of_type(to_nodes, 0):
         slot = get_slot(v)
-        x = get_alt_slot(v) #sees if slot is potential 4hr (has alternate node) and returns node if yes
+        x = get_alt_slot(v, PREV_SLOT) #sees if slot is potential 4hr (has alternate node) and returns node if yes
         if x != None:
-            prob += lpSum([choices[u][v] + choices[u][x] for u in from_nodes]) <= slotdict[slot], ""
+            prob += lpSum([choices[u][v] + choices[u][x] for u in from_nodes]) <= (slotdict[slot] + target_delta), ""
         else:
-            prob += lpSum([choices[u][v] for u in from_nodes]) <= slotdict[slot], ""
+            prob += lpSum([choices[u][v] for u in from_nodes]) <= (slotdict[slot] + target_delta), ""
+    for v in get_slots_of_type(to_nodes, 0):
+        slot = get_slot(v)
+        x = get_alt_slot(v, PREV_SLOT) #sees if slot is potential 4hr (has alternate node) and returns node if yes
+        if x != None:
+            prob += lpSum([choices[u][v] + choices[u][x] for u in from_nodes]) >= slotdict[slot], ""
+        else:
+            prob += lpSum([choices[u][v] for u in from_nodes]) >= slotdict[slot], ""
+
 
 # For all s,k,j x(s,k,j,1) \leq \sum_\ell x(s,k-2,\ell,0)+x(s,k-2,\ell,1). Guarantees that you get to be the end of a 4-hour slot only if you're actually part of the slot before it.
     for u in from_nodes:
         #make list of student nodes
         name = u.split('_')[:1][0]
         j_nodes = get_student_nodes(name, from_nodes)
-        for x in get_slot_type(to_nodes, 1):
-            prev = get_prev_slot(x)
-            prev_x = get_alt_slot(prev)
+        for x in get_slots_of_type(to_nodes, 1):
+            prev = get_prev_slot(x, PREV_SLOT)
+            prev_x = get_alt_slot(prev, PREV_SLOT)
             if prev_x != None:
                 prob += lpSum([choices[j][x] - choices[j][prev] - choices[j][prev_x] for j in j_nodes]) <= 0, ""
             else:
@@ -265,10 +288,10 @@ def solve_wbm(from_nodes, to_nodes, wt):
         #make list of student nodes
         name = u.split('_')[:1][0]
         j_nodes = get_student_nodes(name, from_nodes)
-        for v in get_slot_type(to_nodes, 0):
-            prev = get_prev_slot(v)
+        for v in get_slots_of_type(to_nodes, 0):
+            prev = get_prev_slot(v, PREV_SLOT)
             if prev != None:
-                prev_x = get_alt_slot(prev)
+                prev_x = get_alt_slot(prev, PREV_SLOT)
                 if prev_x != None:
                     prob += lpSum([choices[j][v] + choices[j][prev] + choices[j][prev_x] for j in j_nodes]) <= 1, ""
                 else:
@@ -279,43 +302,46 @@ def solve_wbm(from_nodes, to_nodes, wt):
     for u in from_nodes:
         prob += lpSum([choices[u][v] for v in to_nodes]) <= 1, ""
 
-    # # constraint on overlaps
-    # for u in from_nodes:
-    #     #make list of student nodes
-    #     name = u.split('_')[:1][0]
-    #     j_nodes = get_student_nodes(name, from_nodes)
-    #     for v in to_nodes:
-    #         # D) For all i, and all k, k' which are overlapping, \sum_j x(i,j,k) + x(i,j,k') \leq 1 (student cannot take overlapping shifts).
-    #         if v in OVERLAPS.keys():
-    #             overlap_nodes = OVERLAPS[v] #get overlap nodes as list
-    #             for k in overlap_nodes:
-    #                 prob += lpSum([choices[u][v] for u in j_nodes] + [choices[u][k] for u in j_nodes]) <= 1, ""
+    # make sure each slot has >=2 experienced TA's
+    for v in get_slots_of_type(to_nodes, 0):
+        slot = get_slot(v)
+        x = get_alt_slot(v, PREV_SLOT) #sees if slot is potential 4hr (has alternate node) and returns node if yes
+        exp_studs_nodes = []
+        for student in exp_dict:
+            if exp_dict[student] > 0: # if experienced, add their nodes to list
+                j_nodes = get_student_nodes(student, from_nodes)
+                exp_studs_nodes.extend(j_nodes)
+        if x != None:
+            prob += lpSum([choices[u][v] + choices[u][x] for u in exp_studs_nodes]) >= MIN_EXP, ""
+        else:
+            prob += lpSum([choices[u][v] for u in exp_studs_nodes]) >= MIN_EXP, ""
 
-    # for v in to_nodes:
-    #    #A) For all k, \sum_{i,j} x(i,j,k) \leq c_k (for each slot, have at most c_k students in that slot).
-    #    prob += lpSum([choices[u][v] for u in from_nodes]) <= slotdict[v], ""
-    # for u in from_nodes:
-    #     #B) For all i, j, \sum_k x(i,j,k) \leq 1 (a student can only use their jth shift once)
-    #     prob += lpSum([choices[u][v] for v in to_nodes]) <= 1, ""
-
-
-
-
-
-# E) For all i,j,k, x(i,j,k) \in {0,1} (Integer Program)
-# E') For all i,j,k, x(i,j,k) \in [0,1] (Linear Program)
+    #make sure each stress slot has MIN_SKILL skilled ta's
+    stress_nodes = []
+    for slot in stress_slots:
+        stress_nodes.append(slot + '_0')
+    for v in get_slots_of_type(stress_nodes, 0):
+        slot = get_slot(v)
+        x = get_alt_slot(v, PREV_SLOT)
+        skill_studs_nodes = []
+        for student in skill_dict:
+            if skill_dict[student] > 2: # if highly skilled student, add their nodes to list
+                j_nodes = get_student_nodes(student, from_nodes)
+                skill_studs_nodes.extend(j_nodes)
+        if x != None:
+            prob += lpSum([choices[u][v] + choices[u][x] for u in skill_studs_nodes]) >= MIN_SKILL, ""
+        else:
+            prob += lpSum([choices[u][v] for u in skill_studs_nodes]) >= MIN_SKILL, ""
 
     # The problem data is written to an .lp file
     prob.writeLP("WBM.lp")
-
     # The problem is solved using PuLP's choice of Solver
     prob.solve()
-
  # The status of the solution is printed to the screen
     print( "Status:", LpStatus[prob.status])
     return(prob)
 
-
+#UPDATE FOR 24 HOUR
 def get_solution(prob):
     # Each of the variables is printed with it's resolved optimum value
     sched_dict = {}
@@ -337,37 +363,78 @@ def get_solution(prob):
     # print(f"Sum of wts of selected edges = {round(value(prob.objective), 4)}")
     return(sched_dict)
 
+#-------------------------------------------------------------------------------
+# Node Manipulation Area
+#-------------------------------------------------------------------------------
+
+def get_student_nodes(name, student_nodes):
+    '''gets a student's nodes given their name'''
+    name_nodes = []
+    for node in student_nodes:
+        if (node.split("_")[:1][0] == name):
+            name_nodes.append(node)
+    return name_nodes
+
+#gets the slot given the node UPDATE FOR 24 HOUR
+def get_slot(slot_node):
+    slot = slot_node[:-2]
+    return(slot)
+
+#gets the START TIME given the node UPDATE FOR 24 HOUR
+def get_hours(slot_node):
+    slot_type = slot_node[-1]
+    if int(slot_type) == 1:
+        return(4)
+    else:
+        return(2)
+
 #gets all slots of a given type
-def get_slot_type(to_nodes, slot_type):
+def get_slots_of_type(to_nodes, slot_type):
     all_slot_type = []
     for slot_node in to_nodes:
         if int(slot_node[-1]) == int(slot_type):
             all_slot_type.append(slot_node)
     return(all_slot_type)
 
-def get_alt_slot(slot_node):
+#gets the student's other node (ending with 1)
+def get_alt_slot(slot_node, PREV_SLOT):
     slot = get_slot(slot_node)
-    if is_4hr(slot):
+    if is_4hr(slot, PREV_SLOT):
         alt_slot = str(slot) + "_1"
         return(alt_slot)
     else:
         return(None)
 
-def is_4hr(slot):
+#checks whether a slot is potentially a 4hr slot
+def is_4hr(slot, PREV_SLOT):
     if slot in PREV_SLOT.keys():
         return(True)
     else:
         return(False)
 
-def get_prev_slot(slot_node):
+#gets the previous slot node in schedule (possibly None)
+def get_prev_slot(slot_node, PREV_SLOT):
     slot = get_slot(slot_node)
-    if is_4hr(slot):
+    if is_4hr(slot, PREV_SLOT):
         prev_slot = PREV_SLOT[slot]
         prev_slot_node = str(prev_slot) + "_0"
         return(prev_slot_node)
     else:
         return(None)
 
+#gets all slot nodes of the given day
+def get_day_slots(day, slot_nodes_2, slot_nodes_4):
+    day_slots = []
+    for slot_node in slot_nodes_2:
+        slot = get_slot(slot_node)
+        slot_day = slot[:-2]
+        if str(slot_day) == str(day):
+            day_slots.append(slot_node)
+    for slot_node in slot_nodes_4:
+        slot_day = slot[:-2]
+        if str(slot_day) == str(day):
+            day_slots.append(slot_node)
+    return(day_slots)
 
 def get_selected_edges(prob):
 
@@ -379,25 +446,26 @@ def get_selected_edges(prob):
         selected_edges.append((su, sv))
     return(selected_edges)
 
-
 #-------------------------------------------------------------------------------
 # Testing area
 #-------------------------------------------------------------------------------
-def main():
+
+# a full run of the program
+def run():
     df = input_creator.make_df()
 
     #example weights
     weight_dict = {}
 
 
-    weight_dict['slot_type'] = 7
-    weight_dict['no_1'] = 9
-    weight_dict['guarantee_shift'] = 6
-    weight_dict['avail'] = 4
+    weight_dict['slot_type'] = 6
+    weight_dict['no_1'] = 8
+    weight_dict['guarantee_shift'] = 7
+    weight_dict['avail'] = 6
     weight_dict['shift_cap'] = 3
     weight_dict['equality'] = 3
 
-
+    skill_dict = make_skill_dict(df)
 
     #create graph nodes and weight edges
     graph_data = create_graph(df, weight_dict)
@@ -407,70 +475,85 @@ def main():
 
     #solve the problem and get the ordered schedule
     p = solve_wbm(student_nodes, slot_nodes, wt)
+    # if solving takes a long time it's because the optimum
     unordered_sched_dict = get_solution(p)
     max_weight_sched = order_sched(df, unordered_sched_dict)
     # Schedule.print_sched(max_weight_sched)
     schedule_to_df(df, max_weight_sched)
 
-    for slot in max_weight_sched:
-        if len(max_weight_sched[slot]) < slotdict[slot]:
-            diff = slotdict[slot] - len(max_weight_sched[slot])
-            print(slot, " not full, needs: ", diff, " ta's")
 
-    # #make list of overlap students and resolve them
-    # overlaps = labTA.get_overlaps(df, max_weight_sched)
-    # print(overlaps)
-    # resolve_overlaps(df, max_weight_sched, overlaps)
+def main():
+    run_times = []
+    for i in range(50):
 
-    print(df)
-    #Evaluate happiness stats of schedule
-    post_hap = stats.sched_happiness(df, max_weight_sched, PREV_SLOT)
+        start_time = time.perf_counter()
+        run()
+        end_time = time.perf_counter()
+        elapsed = end_time - start_time
+        print(elapsed)
+        run_times.append(elapsed)
 
-#[avg_hap, corr, var[0], min_students, max_students, stud_1s, shiftless, wrong_type_studs]
-
-    print('Average Happiness: ', post_hap[0])
-    print()
-    print('Availability to happiness correlation: ', post_hap[1])
-    print()
-    print('Variance of happiness: ', post_hap[2])
-    print()
-    print('Min happy outlier students: ', post_hap[3])
-    print()
-    print('Max happy outlier students: ', post_hap[4])
-    print()
-    print('Students who got 1\'s: ', post_hap[5])
-    print()
-    print('Students without shifts: ', post_hap[6])
-    print()
-    print('Students who got wrong slot type: ', post_hap[7])
-    print()
-
-
-    # #get experience dict
-    # exp_dict = {}
-    # students = list(df['name'])
-    # for index in range(NUM_STUDENTS):
-    #     exp_dict[str(df.at[index, 'name'])] = int(df.at[index, 'experience'])
+    print('Run Time Boxplot:')
+    stats.boxplot_stats(run_times)
+    #     for slot in max_weight_sched:
+    #         if len(max_weight_sched[slot]) < slotdict[slot]:
+    #             diff = slotdict[slot] - len(max_weight_sched[slot])
+    #             print(slot, " not full, needs: ", diff, " ta's")
     #
-    # #Evaluate experience stats of schedule
-    # stats.exp_stats(exp_dict, max_weight_sched)
-    # response = True
-    # while (response == True):
-    #     response = str(input("Want to swap a student out? (y/n): "))
-    #     if response == "y":
-    #         student = str(input("Enter student to swap: "))
-    #         slot = str(input("Enter their slot to swap them out of: "))
+    #     # #make list of overlap students and resolve them
+    #     # overlaps = labTA.get_overlaps(df, max_weight_sched)
+    #     # print(overlaps)
+    #     # resolve_overlaps(df, max_weight_sched, overlaps)
     #
-    #         #check student and slot are good inputs
-    #         if student not in list(df['name']):
-    #             print('student given is not in schedule')
-    #             exit(0)
-    #         if slot not in slotdict.keys():
-    #             print('slot given is not in schedule')
-    #             exit(0)
+    #     print(df)
+    #     #Evaluate happiness stats of schedule
+    #     post_hap = stats.sched_happiness(df, max_weight_sched, PREV_SLOT)
     #
-    #         swap_cands_dict = swap.max_weight_suggest(max_weight_sched, p, wt, slot, student)
-    #         accept_swap  = False
+    # #[avg_hap, corr, var[0], min_students, max_students, stud_1s, shiftless, wrong_type_studs]
+    #
+    #     print('Average Happiness: ', post_hap[0])
+    #     print()
+    #     print('Availability to happiness correlation: ', post_hap[1])
+    #     print()
+    #     print('Variance of happiness: ', post_hap[2])
+    #     print()
+    #     print('Min happy outlier students: ', post_hap[3])
+    #     print()
+    #     print('Max happy outlier students: ', post_hap[4])
+    #     print()
+    #     print('Students who got 1\'s: ', post_hap[5])
+    #     print()
+    #     print('Students without shifts: ', post_hap[6])
+    #     print()
+    #     print('Students who got wrong slot type: ', post_hap[7])
+    #     print()
+    #
+    #
+    # # #get experience dict
+    # # exp_dict = {}
+    # # students = list(df['name'])
+    # # for index in range(NUM_STUDENTS):
+    # #     exp_dict[str(df.at[index, 'name'])] = int(df.at[index, 'experience'])
+    # #
+    # # #Evaluate experience stats of schedule
+    # # stats.exp_stats(exp_dict, max_weight_sched)
+    # # response = True
+    # # while (response == True):
+    # #     response = str(input("Want to swap a student out? (y/n): "))
+    # #     if response == "y":
+    # #         student = str(input("Enter student to swap: "))
+    # #         slot = str(input("Enter their slot to swap them out of: "))
+    # #
+    # #         #check student and slot are good inputs
+    # #         if student not in list(df['name']):
+    # #             print('student given is not in schedule')
+    # #             exit(0)
+    # #         if slot not in slotdict.keys():
+    # #             print('slot given is not in schedule')
+    # #             exit(0)
+    # #
+    # #         swap_cands_dict = swap.max_weight_suggest(max_weight_sched, p, wt, slot, student)
+    # #         accept_swap  = False
     #         while (accept_swap == False):
     #             for cand in swap_cands_dict.keys():
     #                 #print out top candidate edge
