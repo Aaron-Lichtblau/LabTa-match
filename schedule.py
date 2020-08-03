@@ -2,7 +2,6 @@
 
 class Schedule:
 
-
     def __init__(self, schedule = None):
         """initialize schedule from given schedule, default is blank"""
         if schedule == None:
@@ -33,6 +32,9 @@ class Schedule:
             print('this student: ', student, " is already not in the schedule at this slot: ", slot)
         self.schedule[slot].remove(student)
 
-    # def print_sched(self):
-    #     """prints out the schedule"""
-    #     print(json.dumps(self.schedule, indent=3))
+    def print_sched(self):
+        """prints out the schedule"""
+        for slot in self.schedule:
+            print(slot, ": ")
+            print(self.schedule[slot])
+        # print(json.dumps(self.schedule, indent=3))

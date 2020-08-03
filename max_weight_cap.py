@@ -4,7 +4,6 @@ import gspread
 import pandas as pd
 from schedule import Schedule
 import stats
-import swap
 import time
 import random
 # import re
@@ -37,6 +36,26 @@ def order_sched(df, unordered_sched_dict, slotdict):
     max_weight_sched = Schedule(max_weight_dict)
     return(max_weight_sched)
 
+def update_df(df, student, slot):
+    try:
+        index = df.loc[df['name'] == student].index[0]
+    except:
+        print('student not found in df: ', student)
+    #update preference table
+    score = df.at[index, slot]
+    cap = df.at[index, 'cap']
+    df.at[index, slot] = -(score)
+    #update hours worked and happiness
+    temp_work = df.at[index, 'hours']
+    temp_hap = df.at[index, 'happiness']
+    hap = (score * 100) / (3 * cap)
+    if df.at[index, slot] < 0: #shows they added slot
+        df.at[index, 'hours'] = (temp_work + 2)
+        df.at[index, 'happiness'] = (temp_hap + hap)
+    else:
+        df.at[index, 'hours'] = (temp_work - 2)
+        df.at[index, 'happiness'] = (temp_hap + hap)
+
 #convert a schedule into a df
 def schedule_to_df(df, schedule):
     """given a schedule, this updates the starting dataframe of preferences"""
@@ -44,7 +63,7 @@ def schedule_to_df(df, schedule):
         if (len(slot) == 0):
             print('empty slot in schedule ERROR!')
         for student in schedule[slot]:
-            swap.update_df(df, student, slot)
+            update_df(df, student, slot)
 
 #-------------------------------------------------------------------------------
 # Weight Area
@@ -63,18 +82,26 @@ def get_tier_emph(weight_dict):
             emph_dict[weight] = weight_dict[weight]
     return [tier_dict, emph_dict]
 
-def weight_edge(df, student_node, slot_node, weight_dict, NUM_SLOTS):
+def weight_edge(df, student_node, slot_node, weight_dict, NUM_SLOTS, slot_duration):
     #returns the student-slot edge weight
 
     student = student_node.split("_")[0]
     slot = get_slot(slot_node)
-    slot_hours = get_hours(slot_node)
+    slot_hours = get_hours(slot_node, slot_duration)
     j = student_node.split("_")[1]
     student_index = df.loc[df['name'] == student].index[0]
     weight = 0
 
     tier_dict = get_tier_emph(weight_dict)[0]
     emph_dict = get_tier_emph(weight_dict)[1]
+
+    # preprocess weights to avoid infeasible solutions
+    if tier_dict['avail'] > 7:
+        tier_dict['avail'] = 7
+    # for weight in tier_dict:
+    #     if tier_dict[weight] > 9:
+    #         tier_dict[weight] = 9
+
 
     #collect tier information
     slot_type_tier = 100 ** int(tier_dict['slot_type'])
@@ -134,7 +161,7 @@ def weight_edge(df, student_node, slot_node, weight_dict, NUM_SLOTS):
 # Graph Area
 #-------------------------------------------------------------------------------
 
-def create_graph(df, weight_dict, slotdict, PREV_SLOT, NUM_SLOTS):
+def create_graph(df, weight_dict, slotdict, PREV_SLOT, NUM_SLOTS, slot_duration):
     ''''returns student nodes, slot nodes and dict of weights'''
     student_nodes = []
     students = list(df['name'])
@@ -157,7 +184,7 @@ def create_graph(df, weight_dict, slotdict, PREV_SLOT, NUM_SLOTS):
     weights = {}
     for student in student_nodes:
         for slot in slot_nodes:
-            weights[(student, slot)] = weight_edge(df, student, slot, weight_dict, NUM_SLOTS)
+            weights[(student, slot)] = weight_edge(df, student, slot, weight_dict, NUM_SLOTS, slot_duration)
 
     wt = create_wt_doubledict(student_nodes, slot_nodes, weights)
     return(student_nodes, slot_nodes, wt)
@@ -176,12 +203,24 @@ def create_wt_doubledict(from_nodes, to_nodes, weights):
 
     return(wt)
 
+#makes a dict of names (keys) and col values (values)
+def get_dict(df, col):
+    col_dict = {}
+    for name in df['name']:
+        index = df.loc[df['name'] == name].index[0]
+        col_dict[name] = df.at[index, col]
+    return (col_dict)
 #-------------------------------------------------------------------------------
 # Solver Area
 #-------------------------------------------------------------------------------
 
-def solve_wbm(from_nodes, to_nodes, wt, slotdict, PREV_SLOT, OVERLAPS, MIN_EXP, exp_dict, MIN_SKILL, skill_dict, stress_slots, target_delta, flex_shifts):
+def solve_wbm(from_nodes, to_nodes, wt, df, slotdict, MIN_EXP, MIN_SKILL, stress_slots, target_delta, flex_shifts, slot_duration):
     ''' A wrapper function that uses pulp to formulate and solve a WBM'''
+
+    exp_dict = get_dict(df, 'experience')
+    skill_dict = get_dict(df, 'skill')
+    gap_dict = get_dict(df, 'gap')
+    PREV_SLOT = input_creator.get_prev_slots(df, slot_duration)
 
     prob = LpProblem("WBM Problem", LpMaximize)
 
@@ -207,13 +246,14 @@ def solve_wbm(from_nodes, to_nodes, wt, slotdict, PREV_SLOT, OVERLAPS, MIN_EXP, 
         name = u.split('_')[:1][0]
         j_nodes = get_student_nodes(name, from_nodes)
         #get student's overlap dict
-        # min_gap = gap_dict[name]
-        # overlaps = input_creator.get_overlaps(slots, min_gap, duration)
+        min_gap = gap_dict[name]
+        slots = slotdict.keys()
+        overlaps = input_creator.get_overlaps(slots, min_gap, slot_duration)
         for v in get_slots_of_type(to_nodes, 0):
             x = get_alt_slot(v, PREV_SLOT) #sees if slot is potential 4hr (has alternate node)
             k = get_slot(v)
-            if x != None and k in OVERLAPS.keys():
-                overlap_slots = OVERLAPS[k] #get overlap nodes as list
+            if x != None and k in overlaps.keys():
+                overlap_slots = overlaps[k] #get overlap nodes as list
                 overlap_nodes = []
                 for slot in overlap_slots:
                     node_0 = str(slot)+"_0"
@@ -229,8 +269,8 @@ def solve_wbm(from_nodes, to_nodes, wt, slotdict, PREV_SLOT, OVERLAPS, MIN_EXP, 
                         prob += lpSum([choices[u][v] + choices[u][x] + choices[u][k] for u in j_nodes]) <= 1, ""
             if x != None:
                 prob += lpSum([choices[u][v] + choices[u][x] for u in j_nodes]) <= 1, ""
-            if k in OVERLAPS.keys():
-                overlap_slots = OVERLAPS[k] #get overlap nodes as list
+            if k in overlaps.keys():
+                overlap_slots = overlaps[k] #get overlap nodes as list
                 overlap_nodes = []
                 for slot in overlap_slots:
                     node_0 = str(slot)+"_0"
@@ -341,7 +381,7 @@ def solve_wbm(from_nodes, to_nodes, wt, slotdict, PREV_SLOT, OVERLAPS, MIN_EXP, 
     print( "Status:", LpStatus[prob.status])
     return(prob)
 
-#UPDATE FOR 24 HOUR
+
 def get_solution(prob):
     # Each of the variables is printed with it's resolved optimum value
     sched_dict = {}
@@ -375,18 +415,18 @@ def get_student_nodes(name, student_nodes):
             name_nodes.append(node)
     return name_nodes
 
-#gets the slot given the node UPDATE FOR 24 HOUR
+#gets the slot given the node
 def get_slot(slot_node):
     slot = slot_node[:-2]
     return(slot)
 
-#gets the START TIME given the node UPDATE FOR 24 HOUR
-def get_hours(slot_node):
+#gets the node type (2hr vs 4hr) given the node
+def get_hours(slot_node, slot_duration):
     slot_type = slot_node[-1]
     if int(slot_type) == 1:
-        return(4)
+        return(2*slot_duration)
     else:
-        return(2)
+        return(slot_duration)
 
 #gets all slots of a given type
 def get_slots_of_type(to_nodes, slot_type):

@@ -17,7 +17,7 @@ def exp_stats(exp_dict, schedule):
             slot_exp += student_exp
         ave_exp = float(slot_exp) / float(len(schedule[slot]))
         slot_exp_dict[str(slot)] = ave_exp
-    plt.figure(figsize=(10, 3))
+    plt.figure(figsize=(12, 3))
     plt.bar(list(slot_exp_dict.keys()), slot_exp_dict.values(), color='b', align='edge', width=0.3)
     plt.title('Avg Experience of TAs per Slot')
     plt.ylabel('Past Semesters Worked')
@@ -35,7 +35,7 @@ def skill_stats(skill_dict, schedule):
             slot_skill += student_skill
         ave_skill = float(slot_skill) / float(len(schedule[slot]))
         slot_skill_dict[str(slot)] = ave_skill
-    plt.figure(figsize=(10, 3))
+    plt.figure(figsize=(12, 3))
     plt.bar(list(slot_skill_dict.keys()), slot_skill_dict.values(), color='b', align='edge', width=0.3)
     plt.title('Avg Skill of TAs per Slot')
     plt.ylabel('Past Semesters Worked')

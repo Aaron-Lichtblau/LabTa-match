@@ -8,14 +8,6 @@ from random import randint
 STUD_SLOTS_WORKED_CAP = 2 #default cap on work shifts
 SLOTS = ["M_7", "M_9","Tu_7", "Tu_9","W_7", "W_9","Th_7", "Th_9","F_7", "F_9","Sa_3", "Sa_4","Sa_5","Su_5","Su_6","Su_7","Su_8", "Su_9"]
 
-def unflip(dict):
-    # swap keys and values to unflip
-    unflipped_dict = {}
-    for key in dict:
-        unflipped_dict[dict[key]] = key
-
-    return(unflipped_dict)
-
 def get_exp(exp_file, students):
     '''returns a list of given students' semesters of past labTA experience'''
     exp_dict = {}
@@ -38,29 +30,10 @@ def get_exp(exp_file, students):
 
     return(exp_list)
 
-def make_exp(students):
-    exp_dist = [0, 0, 0, 1, 1, 1, 2, 2, 3, 3, 4]
-    exp_list = []
-    for student in students:
-        exp_list.append(choice(exp_dist))
-
-    return(exp_list)
-
-def make_skill(df):
-    #get experience dict
-    exp_dict = {}
-    students = list(df['name'])
-    for index in range(len(df['name'])):
-        exp_dict[str(df.at[index, 'name'])] = int(df.at[index, 'experience'])
-    skill_list = []
-    for stud in exp_dict:
-        skill_list.append(randint(0, exp_dict[stud] + 1))
-    return(skill_list)
-
 #get list of slots from df
 def get_slots(df):
     slots = df.columns.tolist()
-    non_slots = ['name', 'slot_type', 'availability', 'cap', 'experience', 'skill', 'hours', 'happiness']
+    non_slots = ['name', 'slot_type', 'availability', 'cap', 'experience', 'skill', 'hours', 'happiness', 'gap']
     for val in non_slots:
         try:
             slots.remove(val)
@@ -69,21 +42,26 @@ def get_slots(df):
     return(slots)
 
 #get a dict of days (keys) and slots on those days (values as lists)
-def get_days(slotdict):
-    day_dict = {'M':[], 'Tu':[], 'W':[], 'Th':[], 'F':[], 'Sa':[], "Su":[]}
-    for slot in slotdict:
-        day = slot[:-2]
-        day_dict[day].append(slot)
-    return day_dict
+# def get_days(slotdict):
+#     day_dict = {'Mo':[], 'Tu':[], 'We':[], 'Th':[], 'Fr':[], 'Sa':[], "Su":[]}
+#     for slot in slotdict:
+#         day = slot[:-2]
+#         day_dict[day].append(slot)
+#     return day_dict
+
+#given a slot "M0_15", it returns the start time: "15"
+def get_start_time(slot):
+    start_time = int(slot[-2:])
+    return(start_time)
 
 #gets overlaps dict
 def get_overlaps(slots, min_gap, duration):
     OVERLAPS = {}
     for i_slot in slots:
-        i_start_time = int(i_slot[-1])
+        i_start_time = get_start_time(i_slot)
         i_day = i_slot[:2]
         for j_slot in slots:
-            j_start_time = int(j_slot[-1])
+            j_start_time = get_start_time(j_slot)
             j_day = j_slot[:2]
             if (i_start_time < j_start_time) and (i_day == j_day) and ((i_start_time + duration != j_start_time) and (j_start_time - i_start_time < min_gap + duration)):
                 if j_slot not in OVERLAPS.keys():
@@ -97,61 +75,56 @@ def get_prev_slots(df, duration):
     slots = get_slots(df)
     PREV_SLOT = {}
     for i_slot in slots:
-        i_start_time = int(i_slot[-1])
+        i_start_time = get_start_time(i_slot)
         i_day = i_slot[:2]
         for j_slot in slots:
-            j_start_time = int(j_slot[-1])
+            j_start_time = get_start_time(j_slot)
             j_day = j_slot[:2]
             if (i_start_time < j_start_time) and (i_day == j_day) and (i_start_time + duration == j_start_time):
                 PREV_SLOT[j_slot] = i_slot
 
     return(PREV_SLOT)
 
-#function will be replaced by get_cap above
-def make_cap(students):
-    cap_dist = [2, 2, 2, 2, 3, 3, 3, 4, 4, 5] # dist of sample caps
-    cap_dict = {}
-    for student in students:
-        cap_dict[student] = 2
-
+#makes default columns
+def make_col(students, value):
     cap_list = []
     for student in students:
-        cap_list.append(cap_dict[student])
+        cap_list.append(value)
     return(cap_list)
 
-def make_df():
-    df = pd.DataFrame()
-
-
-    STUDENTS = ['Aaron', 'Alfred', 'Anne Hath','Bob', 'Billy J', 'Charlie', 'Cleopatra','Chet B','Danielle', 'Demetris','Evan', 'Eisgruber','Faris', 'Gandalf','Gordon Ramsay', 'Guy F','Harrold', 'HAL 9000','Immanuel','Indiana J','Jack', 'James B','Jason B', 'Kerry', 'Lucy', 'Marrian', 'MJ', 'Napoleon', 'Nora', 'Nathan Drake','Oswald', 'Oprah', 'Peter', 'Quincy', 'Reese', 'Sandra', 'Theodore', 'Tony T', 'Tom Cruise', 'Uri', 'Val', 'Wally', 'Xerxes', 'Yang', 'Zachariah']
-    row_nums = len(STUDENTS)
-
-    df['name'] = STUDENTS #make name column
-    avail_col = [0] * row_nums #make availability column
-    for slot in SLOTS: #make slot columns
-        slot_col = []
-        for student in range(row_nums):
-            pref = randint(0, 3)
-            slot_col.append(pref)
-            avail_col[student] += pref
-        df[slot] = slot_col
-    slot_type_col = [] #make slot type column
-    for student in range(row_nums):
-        types = [0, 2, 4]
-        slot_type_col.append(choice(types))
-    df['slot_type'] = slot_type_col
-    hours_col = [0] * row_nums #make hours column
-    df['hours'] = hours_col
-    df['availability'] = avail_col #put in availability column
-    hap_col = [0] * row_nums #make happiness column
-    df['happiness'] = hap_col
-    shift_cap_list = make_cap(STUDENTS)
-    df['cap'] = shift_cap_list #add cap column to df
-
-    exp_list = make_exp(STUDENTS) #list of made up exp
-    df['experience'] = exp_list #add experience column to df
-
-    return(df)
+# def make_df():
+#     df = pd.DataFrame()
+#
+#
+#     STUDENTS = ['Aaron', 'Alfred', 'Anne Hath','Bob', 'Billy J', 'Charlie', 'Cleopatra','Chet B','Danielle', 'Demetris','Evan', 'Eisgruber','Faris', 'Gandalf','Gordon Ramsay', 'Guy F','Harrold', 'HAL 9000','Immanuel','Indiana J','Jack', 'James B','Jason B', 'Kerry', 'Lucy', 'Marrian', 'MJ', 'Napoleon', 'Nora', 'Nathan Drake','Oswald', 'Oprah', 'Peter', 'Quincy', 'Reese', 'Sandra', 'Theodore', 'Tony T', 'Tom Cruise', 'Uri', 'Val', 'Wally', 'Xerxes', 'Yang', 'Zachariah']
+#     row_nums = len(STUDENTS)
+#
+#     df['name'] = STUDENTS #make name column
+#     avail_col = [0] * row_nums #make availability column
+#     for slot in SLOTS: #make slot columns
+#         slot_col = []
+#         for student in range(row_nums):
+#             pref = randint(0, 3)
+#             slot_col.append(pref)
+#             avail_col[student] += pref
+#         df[slot] = slot_col
+#     slot_type_col = [] #make slot type column
+#     for student in range(row_nums):
+#         types = [0, 2, 4]
+#         slot_type_col.append(choice(types))
+#     df['slot_type'] = slot_type_col
+#     hours_col = [0] * row_nums #make hours column
+#     df['hours'] = hours_col
+#     df['availability'] = avail_col #put in availability column
+#     hap_col = [0] * row_nums #make happiness column
+#     df['happiness'] = hap_col
+#     shift_cap_list = make_cap(STUDENTS)
+#     df['cap'] = shift_cap_list #add cap column to df
+#
+#     exp_list = make_exp(STUDENTS) #list of made up exp
+#     df['experience'] = exp_list #add experience column to df
+#
+#     return(df)
 
 def get_df(csv_file):
     '''gets the dataframe from google sheet'''
@@ -180,17 +153,6 @@ def get_df(csv_file):
             stud_avail += df.at[student_id, slot]
         availability_col.append(stud_avail)
     df['availability'] = availability_col
-
-    #add cap col
-    shift_cap_list = make_cap(students)
-    df['cap'] = shift_cap_list #add cap column to df
-
-    #add experience col
-    exp_list = get_exp('historical_data.csv', students) #list of exps in order of students
-    df['experience'] = exp_list #add experience column to df
-
-    skill_list = make_skill(df)
-    df['skill'] = skill_list
 
     #add hours and happiness col (initialized to all 0's)
     hours_col = [0] * row_nums
