@@ -9,7 +9,7 @@ import random
 # import re
 # import json
 import input_creator
-# import output_creator
+import output_creator
 from oauth2client.service_account import ServiceAccountCredentials
 
 #check if there are enough shifts allocated to give everyone 2 shifts
@@ -177,7 +177,7 @@ def create_graph(df, weight_dict, slotdict, PREV_SLOT, NUM_SLOTS, slot_duration)
         slot_0 = str(slot) + "_0"
         slot_nodes.append(slot_0)
         #check if slot is potential 4 hr
-        if is_4hr(slot, PREV_SLOT):
+        if is_double(slot, PREV_SLOT):
             slot_1 = str(slot) + "_1"
             slot_nodes.append(slot_1)
 
@@ -258,7 +258,7 @@ def solve_wbm(from_nodes, to_nodes, wt, df, slotdict, MIN_EXP, MIN_SKILL, stress
                 for slot in overlap_slots:
                     node_0 = str(slot)+"_0"
                     overlap_nodes.append(node_0)
-                    if is_4hr(slot, PREV_SLOT):
+                    if is_double(slot, PREV_SLOT):
                         node_1 = str(slot)+"_1"
                         overlap_nodes.append(node_1)
                 for k in overlap_nodes:
@@ -275,7 +275,7 @@ def solve_wbm(from_nodes, to_nodes, wt, df, slotdict, MIN_EXP, MIN_SKILL, stress
                 for slot in overlap_slots:
                     node_0 = str(slot)+"_0"
                     overlap_nodes.append(node_0)
-                    if is_4hr(slot, PREV_SLOT):
+                    if is_double(slot, PREV_SLOT):
                         node_1 = str(slot)+"_1"
                         overlap_nodes.append(node_1)
                 for l in overlap_nodes:
@@ -287,9 +287,9 @@ def solve_wbm(from_nodes, to_nodes, wt, df, slotdict, MIN_EXP, MIN_SKILL, stress
     for slot in slotdict:
         total_shifts += slotdict[slot]
     total_shifts += flex_shifts
-    all_2hr_shifts = get_slots_of_type(to_nodes, 0)
-    all_4hr_shifts = get_slots_of_type(to_nodes, 1)
-    all_shifts = all_2hr_shifts + all_4hr_shifts
+    all_single_shifts = get_slots_of_type(to_nodes, 0)
+    all_double_shifts = get_slots_of_type(to_nodes, 1)
+    all_shifts = all_single_shifts + all_double_shifts
     prob += lpSum([choices[u][v] for u in from_nodes for v in all_shifts]) <= total_shifts, ""
 
 
@@ -439,14 +439,14 @@ def get_slots_of_type(to_nodes, slot_type):
 #gets the student's other node (ending with 1)
 def get_alt_slot(slot_node, PREV_SLOT):
     slot = get_slot(slot_node)
-    if is_4hr(slot, PREV_SLOT):
+    if is_double(slot, PREV_SLOT):
         alt_slot = str(slot) + "_1"
         return(alt_slot)
     else:
         return(None)
 
 #checks whether a slot is potentially a 4hr slot
-def is_4hr(slot, PREV_SLOT):
+def is_double(slot, PREV_SLOT):
     if slot in PREV_SLOT.keys():
         return(True)
     else:
@@ -455,7 +455,7 @@ def is_4hr(slot, PREV_SLOT):
 #gets the previous slot node in schedule (possibly None)
 def get_prev_slot(slot_node, PREV_SLOT):
     slot = get_slot(slot_node)
-    if is_4hr(slot, PREV_SLOT):
+    if is_double(slot, PREV_SLOT):
         prev_slot = PREV_SLOT[slot]
         prev_slot_node = str(prev_slot) + "_0"
         return(prev_slot_node)
@@ -492,49 +492,118 @@ def get_selected_edges(prob):
 
 # a full run of the program
 def run():
-    df = input_creator.make_df()
 
-    #example weights
+    #Default csv file
+    csv_file = 'LabTA_test2 - Sheet1.csv'
+
+    #dict of target number of students in each slot
+    slotdict = {"Mo_1900" : 5, "Mo_2100" : 5,"Tu_1900" : 5, "Tu_2100" : 5,"We_1900" : 4, "We_2100" : 3,"Th_1900" : 3, "Th_2100" : 3,"Fr_1900" : 4, "Fr_2100" : 3,"Sa_1500" : 4, "Sa_1600" : 4,"Sa_1700" : 4,"Su_1700" : 5,"Su_1800" : 3,"Su_1900" : 5,"Su_2000" : 4, "Su_2100" : 6}
+
+    duration = 120 #length of slots (in minutes)
+
+    #default column values
+    gap = 180
+    cap = 2
+    skill = 4
+    exp = 3
+
+    #list of slots that need more skilled TA's
+    stress_slots = []
+
+    #numeric value indicating how many TAs the scheduler can hire above the targeted value for any given slot
+    target_delta = 0
+
+    #number of shifts the scheduler can assign in addition to the slotdict shift numbers
+    flex_shifts = 0
+
+    #sets minimum number of experienced TA's per slot
+    MIN_EXP = 0
+
+    #sets minimum number of skilled TA's per stress slot
+    MIN_SKILL = 0
+
+    #gets number of slots
+    NUM_SLOTS = 0
+    for slot in slotdict:
+        NUM_SLOTS += slotdict[slot]
+
+    #Default weights
     weight_dict = {}
-
-
-    weight_dict['slot_type'] = 6
-    weight_dict['no_1'] = 8
-    weight_dict['guarantee_shift'] = 7
-    weight_dict['avail'] = 6
-    weight_dict['shift_cap'] = 3
+    weight_dict['slot_type'] = 4
+    weight_dict['no_1'] = 3
+    weight_dict['guarantee_shift'] = 5
+    weight_dict['avail'] = 7
+    weight_dict['shift_cap'] = 5
     weight_dict['equality'] = 3
 
-    skill_dict = make_skill_dict(df)
+    df = input_creator.get_df(csv_file)
+
+    students = list(df['name'])
+    #check if gap, cap, exp, skill cols are in df
+    if 'gap' not in list(df.columns):
+        #add gap col
+        gap_list = input_creator.make_col(students, gap)
+        df['gap'] = gap_list
+    if 'cap' not in list(df.columns):
+        #add cap col
+        shift_cap_list = input_creator.make_col(students, cap)
+        df['cap'] = shift_cap_list #add cap column to df
+    if 'experience' not in list(df.columns):
+        #add experience col
+        exp_list = input_creator.make_col(students, exp)
+        df['experience'] = exp_list #add experience column to df
+    if 'skill' not in list(df.columns):
+        skill_list = input_creator.make_col(students, skill)
+        df['skill'] = skill_list
+
+    #dict of slots to check as keys, and overlapping slots as values (student won't be placed in overlap)
+    slots = input_creator.get_slots(df)
+    #dict of slots and their prev slots
+    PREV_SLOT = input_creator.get_prev_slots(df, duration)
+
+    #get experience dict and fake temp skill dict for testing
+    exp_dict = {}
+    skill_dict = {}
+    students = list(df['name'])
+    for index in range(len(df['name'])):
+        exp_dict[str(df.at[index, 'name'])] = int(df.at[index, 'experience'])
+        skill_dict[str(df.at[index, 'name'])] = int(df.at[index, 'skill'])
 
     #create graph nodes and weight edges
-    graph_data = create_graph(df, weight_dict)
+    graph_data = create_graph(df, weight_dict, slotdict, PREV_SLOT, NUM_SLOTS, duration)
     student_nodes = graph_data[0]
     slot_nodes = graph_data[1]
     wt = graph_data[2]
 
     #solve the problem and get the ordered schedule
-    p = solve_wbm(student_nodes, slot_nodes, wt)
-    # if solving takes a long time it's because the optimum
+    p = solve_wbm(student_nodes, slot_nodes, wt, df, slotdict, MIN_EXP, MIN_SKILL, stress_slots, target_delta, flex_shifts, duration)
     unordered_sched_dict = get_solution(p)
-    max_weight_sched = order_sched(df, unordered_sched_dict)
-    # Schedule.print_sched(max_weight_sched)
+    max_weight_sched = order_sched(df, unordered_sched_dict, slotdict)
+
+    #print df, exp and happiness stats
     schedule_to_df(df, max_weight_sched)
+
+    post_hap = stats.sched_happiness(df, max_weight_sched, PREV_SLOT)
+
+    format_weights = {'weights used': weight_dict}
+
+    sched_stats = {'avg hap': post_hap[0], 'avail to hap corr': post_hap[1], 'std dev of hap': post_hap[2], 'min hap stud outliers': post_hap[3], 'max hap stud outliers': post_hap[4], 'studs who got 1s': post_hap[5], 'studs without shift': post_hap[6], 'wrong shift type studs': post_hap[7]}
+    output_data = [format_weights, max_weight_sched, sched_stats]
+    return(output_data)
 
 
 def main():
-    run_times = []
-    for i in range(50):
 
-        start_time = time.perf_counter()
-        run()
-        end_time = time.perf_counter()
-        elapsed = end_time - start_time
-        print(elapsed)
-        run_times.append(elapsed)
+    output_data = run()
 
-    print('Run Time Boxplot:')
-    stats.boxplot_stats(run_times)
+    weights = output_data[0]
+    schedule = output_data[1]
+    sched_stats = output_data[2]
+
+    file = output_creator.new_file()
+    output_creator.add_output(file, weights, schedule, sched_stats)
+
+
     #     for slot in max_weight_sched:
     #         if len(max_weight_sched[slot]) < slotdict[slot]:
     #             diff = slotdict[slot] - len(max_weight_sched[slot])

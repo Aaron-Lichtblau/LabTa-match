@@ -96,9 +96,10 @@ def sched_happiness(df, schedule, prev_slot):
     #create a df from student happiness
     df_hap = pd.DataFrame(studhap, columns =['happiness'])
     #get correlation of availability and Happiness
-    corr = df['availability'].corr(df_hap['happiness'])
-    # get variance of happiness
-    var = df_hap.var()
+    corr = df['availability'].corr(df_hap['happiness'], method='pearson')
+    # get standard deviation of happiness
+    std = df_hap.std()
+    std = 100 * float(std[0])
     # get min and max happiness outlier students using z-value
     z = stats.zscore(df_hap)
     min_hap_df = df_hap[(z < (-3)).all(axis=1)]
@@ -124,5 +125,5 @@ def sched_happiness(df, schedule, prev_slot):
         if wrong_type[id] == True:
             wrong_type_studs.append(df.at[id, 'name'])
 
-    hap_stats = [avg_hap, corr, var[0], min_students, max_students, stud_1s, shiftless, wrong_type_studs, wrong_type]
+    hap_stats = [avg_hap, corr, std, min_students, max_students, stud_1s, shiftless, wrong_type_studs, wrong_type]
     return(hap_stats)

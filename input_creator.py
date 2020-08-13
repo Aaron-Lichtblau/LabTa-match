@@ -49,21 +49,48 @@ def get_slots(df):
 #         day_dict[day].append(slot)
 #     return day_dict
 
-#given a slot "M0_15", it returns the start time: "15"
+#given a slot "Mo_1900", it returns the start time: "1900"
 def get_start_time(slot):
-    start_time = int(slot[-2:])
+    start_time = int(slot[-4:])
     return(start_time)
+
+#gets the end time of slot as int. ex: slot = M0_1900, duration = 120 --> endtime = 2100
+def get_end_time(slot, duration):
+    start_hour = int(slot[3:5])
+    start_minute = int(slot[5:7])
+    hours_added = int((start_minute + int(duration)) / 60)
+    min_added = int((start_minute + int(duration)) % 60)
+    if min_added < 10:
+        min_added = '0' + str(min_added)
+    end_hour = start_hour + hours_added
+    end_time = str(end_hour) + str(min_added)
+
+    return(int(end_time))
+
+#get the end time plus student's min gap time of a slot
+def end_plus_gap_time(end_time, gap):
+    start_hour = int(str(end_time)[:2])
+    start_minute = int(str(end_time)[2:4])
+    hours_added = int((start_minute + int(gap)) / 60)
+    min_added = int((start_minute + int(gap)) % 60)
+    if min_added < 10:
+        min_added = '0' + str(min_added)
+    end_hour = start_hour + hours_added
+    end_plus_gap_time = str(end_hour) + str(min_added)
+
+    return(int(end_plus_gap_time))
 
 #gets overlaps dict
 def get_overlaps(slots, min_gap, duration):
     OVERLAPS = {}
     for i_slot in slots:
         i_start_time = get_start_time(i_slot)
+        i_end_time = get_end_time(i_slot, duration)
         i_day = i_slot[:2]
         for j_slot in slots:
             j_start_time = get_start_time(j_slot)
             j_day = j_slot[:2]
-            if (i_start_time < j_start_time) and (i_day == j_day) and ((i_start_time + duration != j_start_time) and (j_start_time - i_start_time < min_gap + duration)):
+            if (i_start_time < j_start_time) and (i_day == j_day) and ((i_end_time != j_start_time) and (j_start_time < end_plus_gap_time(i_end_time, min_gap))):
                 if j_slot not in OVERLAPS.keys():
                     OVERLAPS[j_slot] = [i_slot]
                 else:
@@ -76,11 +103,12 @@ def get_prev_slots(df, duration):
     PREV_SLOT = {}
     for i_slot in slots:
         i_start_time = get_start_time(i_slot)
+        i_end_time = get_end_time(i_slot, duration)
         i_day = i_slot[:2]
         for j_slot in slots:
             j_start_time = get_start_time(j_slot)
             j_day = j_slot[:2]
-            if (i_start_time < j_start_time) and (i_day == j_day) and (i_start_time + duration == j_start_time):
+            if (i_start_time < j_start_time) and (i_day == j_day) and (i_end_time == j_start_time):
                 PREV_SLOT[j_slot] = i_slot
 
     return(PREV_SLOT)
