@@ -5,3 +5,4 @@ pulp
 numpy
 matplotlib
 scipy
+pyyaml
