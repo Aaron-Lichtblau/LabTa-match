@@ -1,8 +1,6 @@
-oauth2client
-gspread
 pandas
 pulp
 numpy
 matplotlib
 scipy
-pyyaml
+jupyterlab
